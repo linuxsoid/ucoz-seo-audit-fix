@@ -148,6 +148,9 @@ claude mcp add --transport http ucoz-seo-audit https://ваш-домен/mcp
 grok mcp add --transport http ucoz-seo-audit https://ваш-домен/mcp
 ```
 
+Grok Bot принимает тот же адрес. Он подключает только серверы, доступные из
+интернета, локальные и слушающие на localhost не берёт, поэтому туннель не нужен.
+
 ChatGPT в режиме Codex, файл `~/.codex/config.toml`:
 
 ```toml

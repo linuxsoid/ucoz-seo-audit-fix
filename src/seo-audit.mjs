@@ -437,7 +437,9 @@ async function auditTls(origin) {
       const socket = tls.connect(
         { host: parsed.hostname, port: 443, servername: parsed.hostname, timeout: 8000 },
         () => {
-          const peer = socket.getPeerCertificate();
+          // true просит всю цепочку, а не только конечный сертификат: корень нужен,
+          // чтобы понять, у всех ли клиентов он есть.
+          const peer = socket.getPeerCertificate(true);
           const authorized = socket.authorized;
           socket.end();
           resolve({ peer, authorized });
@@ -469,10 +471,69 @@ async function auditTls(origin) {
         checks.push(pass('tls.ok', origin, `HTTPS работает, сертификат действует ещё ${daysLeft} дн.`));
       }
     }
+
+    checks.push(...auditCertChain(origin, cert.peer));
   } catch (error) {
     checks.push(issue('recommended', 'tls.check_failed', origin,
       `Не удалось проверить сертификат: ${error.message}`,
       'Проверьте вручную, открывается ли сайт по HTTPS без предупреждений.'));
+  }
+
+  return checks;
+}
+
+/**
+ * Проверка корня цепочки сертификата.
+ *
+ * Зачем это отдельно от обычной проверки доверия. Наш сервер на Linux, и его хранилище
+ * корневых сертификатов обновляется. Он говорит «сертификат доверенный», и формально он
+ * прав. Но у посетителя может быть старая Windows, чьё хранилище новых корней ещё не
+ * знает, и тот же самый сайт откроется у него с предупреждением на весь экран.
+ *
+ * Поймано на живом сайте: bubman.net. С нашего сервера сертификат проходит проверку без
+ * замечаний, а Chrome на Windows отдаёт SEC_E_UNTRUSTED_ROOT и не открывает сайт вовсе.
+ *
+ * Причина в том, что Let’s Encrypt с 13 мая 2026 выдаёт сертификаты по новой иерархии
+ * Generation Y с корнями ISRG Root YE и YR. В цепочке есть кросс-подпись на давно
+ * известные ISRG Root X1 и X2, и большинство клиентов сами достроят доверенный путь.
+ * Но те, кто достраивать не умеет, спотыкаются.
+ *
+ * Поэтому это рекомендация, а не критичное: у большинства посетителей всё откроется.
+ * Но владельцу сайта надо знать, что часть аудитории видит предупреждение.
+ */
+function auditCertChain(origin, peer) {
+  const checks = [];
+  if (!peer) return checks;
+
+  // Идём вверх по цепочке до самоподписанного, то есть до корня.
+  const names = [];
+  let node = peer;
+  const seen = new Set();
+  while (node && !seen.has(node.fingerprint)) {
+    seen.add(node.fingerprint);
+    const cn = node.subject?.CN || node.subject?.O || '';
+    if (cn) names.push(cn);
+    if (node.issuerCertificate === node) break;
+    node = node.issuerCertificate;
+  }
+  if (!names.length) return checks;
+
+  const chain = names.join(' <- ');
+
+  // Ищем поколение Y по ВСЕЙ цепочке, а не по последнему звену.
+  // На bubman.net цепочка выглядит так:
+  //   bubman.net <- YE1 <- Root YE <- ISRG Root X2 <- ISRG Root X1
+  // Последним стоит давно известный X1, и по нему всё выглядит идеально. Но клиент,
+  // который не умеет искать альтернативный путь, останавливается на Root YE, которого
+  // не знает, и показывает предупреждение. Значит важно само присутствие звена YE или YR.
+  const GEN_Y = /^(ISRG )?Root Y[ER]$|^Y[ER]\d+$/;
+  if (names.some((name) => GEN_Y.test(name))) {
+    checks.push(issue('recommended', 'tls.new_root', origin,
+      `В цепочке сертификата есть новый корень Let’s Encrypt поколения Y: ${chain}`,
+      'Часть старых клиентов, особенно Windows без свежих обновлений, этот корень ещё не знает и покажет предупреждение. Убедитесь, что сервер отдаёт полную цепочку с кросс-подписью, и проверьте сайт на ssllabs.com.',
+      { chain }));
+  } else {
+    checks.push(pass('tls.chain_ok', origin, `Цепочка сертификата: ${chain}`));
   }
 
   return checks;
