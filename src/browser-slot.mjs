@@ -22,8 +22,16 @@
  *   BROWSER_QUEUE_WAIT_MS максимальное ожидание в очереди (по умолчанию 120000)
  */
 
-const CONCURRENCY = Math.max(1, Number(process.env.BROWSER_CONCURRENCY ?? 1));
-const QUEUE_MAX = Math.max(0, Number(process.env.BROWSER_QUEUE_MAX ?? 6));
+function slotNumber(name, fallback) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
+// Math.max(1, NaN) это NaN, поэтому одна опечатка в BROWSER_CONCURRENCY навсегда
+// закрывала браузерные тулы: свободных слотов не оказывалось никогда.
+const CONCURRENCY = Math.max(1, slotNumber('BROWSER_CONCURRENCY', 1));
+const QUEUE_MAX = Math.max(0, slotNumber('BROWSER_QUEUE_MAX', 6));
 const QUEUE_WAIT_MS = Math.max(5000, Number(process.env.BROWSER_QUEUE_WAIT_MS ?? 120000));
 
 let active = 0;

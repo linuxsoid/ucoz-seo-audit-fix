@@ -4,20 +4,26 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; uCozSEOAuditFix/0.1; +https://api.u
 
 export async function auditSite(startUrl, options = {}) {
   const maxPages = options.maxPages ?? 25;
+  /**
+   * Проверка адреса перед каждым переходом. Передаётся снаружи: в CLI её нет, потому что
+   * адрес вводит сам владелец и он вправе проверить что угодно. В публичном режиме она
+   * обязательна, иначе перенаправление уводит наш сервер во внутреннюю сеть.
+   */
+  const guard = options.guard ?? null;
   const origin = new URL(startUrl).origin;
   const queue = [normalizeUrl(startUrl)];
   const seen = new Set();
   const skippedUrls = [];
   const pages = [];
 
-  const siteChecks = [...(await auditSiteFiles(origin)), ...(await auditTls(origin))];
+  const siteChecks = [...(await auditSiteFiles(origin, guard)), ...(await auditTls(origin))];
 
   while (queue.length && pages.length < maxPages) {
     const url = queue.shift();
     if (!url || seen.has(url)) continue;
     seen.add(url);
 
-    const page = await fetchPage(url);
+    const page = await fetchPage(url, guard);
     pages.push(page);
 
     if (page.html) {
@@ -45,7 +51,7 @@ export async function auditSite(startUrl, options = {}) {
   }
 
   const duplicateChecks = findDuplicates(pages);
-  const brokenLinkChecks = await auditInternalLinks(pages);
+  const brokenLinkChecks = await auditInternalLinks(pages, guard);
   const siteWideChecks = auditSiteWide(pages, origin);
   const lighthouse = options.lighthouse ? await runLighthouseAudit(startUrl, {
     categories: options.lighthouseCategories,
@@ -118,14 +124,61 @@ export function auditHtmlBundle(items, options = {}) {
   };
 }
 
-async function fetchPage(url) {
+/**
+ * Максимум переходов по перенаправлениям. Больше пяти это уже не настройка сайта, а петля
+ * или редирект-цепочка, которую всё равно надо чинить.
+ */
+const MAX_REDIRECTS = 5;
+
+/**
+ * Загружает страницу, проверяя КАЖДЫЙ адрес, по которому идёт.
+ *
+ * Раньше здесь стояло redirect: 'follow', и защита от SSRF на входе оказывалась
+ * бесполезной: сайт отвечал перенаправлением на http://127.0.0.1 или на 169.254.169.254,
+ * то есть на сервис метаданных облака, и мы честно шли туда и возвращали содержимое тому,
+ * кто прислал адрес. Проверять первый адрес недостаточно, проверять надо каждый.
+ *
+ * Перенаправления обрабатываем сами, поэтому здесь же появилась и цепочка адресов: она
+ * пригодилась и для отчёта, раньше промежуточные хопы просто терялись.
+ */
+async function fetchFollowingSafely(url, guard, init = {}) {
+  let current = url;
+  const chain = [];
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const response = await fetch(current, {
+      method: init.method ?? 'GET',
+      headers: { 'user-agent': USER_AGENT, ...(init.headers ?? {}) },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(init.timeoutMs ?? 15000)
+    });
+
+    const location = response.status >= 300 && response.status < 400
+      ? response.headers.get('location')
+      : null;
+    if (!location) return { response, finalUrl: current, chain };
+
+    let next;
+    try {
+      next = new URL(location, current).toString();
+    } catch {
+      // Сломанное перенаправление: адрес невозможно разобрать. Отдаём ответ как есть,
+      // разбираться с этим будет проверка страницы, у неё для этого есть текст.
+      return { response, finalUrl: current, chain };
+    }
+
+    if (guard) await guard(next);
+    chain.push({ from: current, to: next, status: response.status });
+    current = next;
+  }
+
+  throw new Error(`Слишком много перенаправлений, больше ${MAX_REDIRECTS} подряд.`);
+}
+
+async function fetchPage(url, guard) {
   const started = Date.now();
   try {
-    const response = await fetch(url, {
-      headers: { 'user-agent': USER_AGENT },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(15000)
-    });
+    const { response, finalUrl, chain } = await fetchFollowingSafely(url, guard);
     const contentType = response.headers.get('content-type') ?? '';
     const html = contentType.includes('text/html') ? await response.text() : '';
     return {
@@ -139,7 +192,10 @@ async function fetchPage(url) {
       // X-Robots-Tag. Второй вариант коварнее: в исходнике страницы его не видно.
       xRobotsTag: response.headers.get('x-robots-tag') ?? '',
       // Конечный адрес после всех перенаправлений. Нужен, чтобы поймать цепочки.
-      finalUrl: response.url || url,
+      finalUrl,
+      // Сама цепочка переходов. Раньше терялась целиком, а по ней видно и лишние хопы,
+      // и подмену протокола с https на http посередине.
+      redirectChain: chain,
       html
     };
   } catch (error) {
@@ -175,7 +231,9 @@ async function explainFetchFailure(url) {
     response = await fetch(url, {
       headers: { 'user-agent': USER_AGENT },
       redirect: 'manual',
-      signal: AbortSignal.timeout(10000)
+      // Четыре секунды, а не десять: на восьми недоступных страницах десять секунд каждая
+      // складываются в восемьдесят, то есть больше всего минутного потолка проверки.
+      signal: AbortSignal.timeout(4000)
     });
   } catch {
     return null;
@@ -203,9 +261,9 @@ async function explainFetchFailure(url) {
   return null;
 }
 
-async function auditSiteFiles(origin) {
+async function auditSiteFiles(origin, guard) {
   const checks = [];
-  const robots = await fetchText(`${origin}/robots.txt`);
+  const robots = await fetchText(`${origin}/robots.txt`, guard);
   if (!robots.ok) {
     checks.push(issue('recommended', 'site.robots_missing', origin, 'robots.txt отсутствует или недоступен.', 'Добавьте robots.txt со ссылкой на sitemap.xml.'));
   } else {
@@ -218,7 +276,7 @@ async function auditSiteFiles(origin) {
     }
   }
 
-  const sitemap = await fetchText(`${origin}/sitemap.xml`);
+  const sitemap = await fetchText(`${origin}/sitemap.xml`, guard);
   if (!sitemap.ok) {
     checks.push(issue('recommended', 'site.sitemap_missing', origin, 'sitemap.xml отсутствует или недоступен.', 'Сгенерируйте и опубликуйте sitemap.xml.'));
   } else {
@@ -228,12 +286,11 @@ async function auditSiteFiles(origin) {
   return checks;
 }
 
-async function fetchText(url) {
+async function fetchText(url, guard) {
   try {
-    const response = await fetch(url, {
-      headers: { 'user-agent': USER_AGENT },
-      signal: AbortSignal.timeout(10000)
-    });
+    // Через тот же безопасный обходчик: robots.txt и sitemap.xml тоже могут отвечать
+    // перенаправлением, и по умолчанию мы бы пошли по нему куда угодно.
+    const { response } = await fetchFollowingSafely(url, guard, { timeoutMs: 10000 });
     return { ok: response.ok, status: response.status, text: response.ok ? await response.text() : '' };
   } catch {
     return { ok: false, status: 0, text: '' };
@@ -372,7 +429,7 @@ function findDuplicates(pages) {
   return checks;
 }
 
-async function auditInternalLinks(pages) {
+async function auditInternalLinks(pages, guard) {
   const unique = new Map();
   for (const page of pages) {
     for (const link of page.links ?? []) {
@@ -383,7 +440,7 @@ async function auditInternalLinks(pages) {
   const checks = [];
   const targets = [...unique.keys()].slice(0, 100);
   await Promise.all(targets.map(async (href) => {
-    const result = await headOrGet(href);
+    const result = await headOrGet(href, guard);
     if (result.status >= 400) {
       checks.push(issue('critical', 'links.internal_broken', unique.get(href), `Битая внутренняя ссылка: ${href} вернула ${result.status || 'нет ответа'}.`, 'Исправьте или удалите ссылку.', { targetUrl: href }));
     } else if (result.status === 0) {
@@ -393,16 +450,24 @@ async function auditInternalLinks(pages) {
   return checks;
 }
 
-async function headOrGet(url) {
+/**
+ * Проверяет, отвечает ли внутренняя ссылка. Сначала HEAD, он дешевле, но часть серверов
+ * его не умеет и отвечает 405 или 403: тогда переспрашиваем обычным GET.
+ *
+ * По перенаправлениям идём сами и с той же проверкой адреса, что и обход страниц.
+ * Смотреть только на первый ответ нельзя: ссылка на страницу, которая перенаправляет на
+ * несуществующий адрес, битая, но по коду 301 этого не видно.
+ */
+async function headOrGet(url, guard) {
   try {
-    let response = await fetch(url, { method: 'HEAD', headers: { 'user-agent': USER_AGENT }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    let { response } = await fetchFollowingSafely(url, guard, { method: 'HEAD', timeoutMs: 8000 });
     if (response.status === 405 || response.status === 403) {
-      response = await getForLinkCheck(url);
+      ({ response } = await getForLinkCheck(url, guard));
     }
     return { status: response.status };
   } catch {
     try {
-      const response = await getForLinkCheck(url);
+      const { response } = await getForLinkCheck(url, guard);
       return { status: response.status };
     } catch {
       return { status: 0 };
@@ -410,15 +475,11 @@ async function headOrGet(url) {
   }
 }
 
-function getForLinkCheck(url) {
-  return fetch(url, {
+function getForLinkCheck(url, guard) {
+  return fetchFollowingSafely(url, guard, {
     method: 'GET',
-    headers: {
-      'user-agent': USER_AGENT,
-      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(20000)
+    headers: { accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+    timeoutMs: 20000
   });
 }
 

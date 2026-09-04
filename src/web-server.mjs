@@ -55,8 +55,7 @@
  */
 
 import { createServer } from 'node:http';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { resolveSafeTarget, assertSafeUrl } from './safe-url.mjs';
 import { auditSite } from './seo-audit.mjs';
 import { handleMcpRequest } from './mcp-http.mjs';
 import { browserSlotStats } from './browser-slot.mjs';
@@ -67,17 +66,36 @@ import { lighthouseChecksFromResult } from './lighthouse-audit.mjs';
 import { createZip } from './zip.mjs';
 import { toAgentMarkdown } from './report-agent.mjs';
 
-const PORT = Number(process.env.PORT ?? 8787);
+/**
+ * Число из переменной окружения.
+ *
+ * Мусор вместо числа раньше превращался в NaN, а NaN в сравнении это всегда false. Одна
+ * опечатка в конфиге молча отключала лимит частоты и лимит одновременных проверок, а
+ * потолок страниц превращал каждую проверку в «успешный» отчёт по нулю страниц. Ошибку
+ * конфигурации надо видеть, а не выяснять по странному поведению.
+ */
+function envNumber(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    console.warn(`ВНИМАНИЕ: ${name}=${JSON.stringify(raw)} это не число, беру значение по умолчанию ${fallback}.`);
+    return fallback;
+  }
+  return value;
+}
+
+const PORT = envNumber('PORT', 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
 // Потолок в 20 страниц жёсткий: даже если кто-то выставит MAX_PAGES=500, публичный обход
 // столько не сделает. Полный обход это сценарий владельца через MCP, а не витрины.
-const MAX_PAGES = Math.min(Number(process.env.MAX_PAGES ?? 8), 20);
+const MAX_PAGES = Math.max(1, Math.min(envNumber('MAX_PAGES', 8), 20));
 // Полная проверка стоит 4 токена из этого окна: один за первую часть и три за вторую,
 // которая дороже примерно в двадцать раз. Значение по умолчанию должно вмещать хотя бы
 // три полные проверки, иначе повторная проверка после правок ломается на середине.
-const RATE_LIMIT = Number(process.env.RATE_LIMIT ?? 12);
-const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 10 * 60 * 1000);
-const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
+const RATE_LIMIT = Math.max(1, envNumber('RATE_LIMIT', 12));
+const RATE_WINDOW_MS = Math.max(1000, envNumber('RATE_WINDOW_MS', 10 * 60 * 1000));
+const MAX_CONCURRENT = Math.max(1, envNumber('MAX_CONCURRENT', 2));
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ALLOW_PRIVATE = process.env.ALLOW_PRIVATE === '1';
 // Хостинг может смонтировать приложение по адресу вида https://site/seo/, и тогда
@@ -575,7 +593,7 @@ async function handleAudit(req, res) {
   const startedAt = Date.now();
   try {
     const result = await withTimeout(
-      auditSite(target, { maxPages: MAX_PAGES, lighthouse: false }),
+      auditSite(target, { maxPages: MAX_PAGES, lighthouse: false, guard: assertSafeUrl }),
       AUDIT_TIMEOUT_MS,
       'Проверка заняла слишком много времени. Сайт отвечает медленно.'
     );
@@ -734,104 +752,6 @@ async function handleDeepAudit(req, res) {
   }
 }
 
-/**
- * Приводит присланный адрес к безопасной цели или бросает ошибку с человеческим текстом.
- *
- * Проверяется четыре вещи, и каждая закрывает свой класс злоупотребления:
- *   1. Схема только http и https. Иначе через file: и подобные можно читать локальные файлы.
- *   2. В адресе нет логина и пароля. Иначе наш сервер уйдёт авторизованным куда-то ещё.
- *   3. Порт стандартный. Иначе публичный сервис превращается в сканер портов чужой сети.
- *   4. Имя хоста резолвится в публичный адрес. Это и есть защита от SSRF: сравнивать
- *      строку "localhost" бесполезно, потому что любой домен можно направить на 127.0.0.1.
- */
-async function resolveSafeTarget(raw) {
-  const value = String(raw ?? '').trim();
-  if (!value) throw new Error('Укажите адрес сайта.');
-  if (value.length > 2000) throw new Error('Слишком длинный адрес.');
-
-  // Посетитель обычно вводит "mysite.ucoz.net" без схемы, дописываем https сами.
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
-
-  let parsed;
-  try {
-    parsed = new URL(withScheme);
-  } catch {
-    throw new Error('Это не похоже на адрес сайта.');
-  }
-
-  if (!/^https?:$/.test(parsed.protocol)) {
-    throw new Error('Поддерживаются только адреса http и https.');
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error('Адрес с логином и паролем проверить нельзя.');
-  }
-  if (parsed.port && parsed.port !== '80' && parsed.port !== '443') {
-    throw new Error('Проверяются только стандартные порты 80 и 443.');
-  }
-
-  if (!ALLOW_PRIVATE) {
-    const addresses = await resolveAll(parsed.hostname);
-    if (!addresses.length) throw new Error('Домен не резолвится. Проверьте адрес.');
-    for (const address of addresses) {
-      if (isPrivateAddress(address)) {
-        throw new Error('Этот адрес ведёт во внутреннюю сеть, проверка таких адресов запрещена.');
-      }
-    }
-  }
-
-  return parsed.toString();
-}
-
-async function resolveAll(hostname) {
-  // Литеральный IP в адресе резолвить не надо, он уже адрес.
-  if (isIP(hostname)) return [hostname];
-  try {
-    const records = await lookup(hostname, { all: true });
-    return records.map((record) => record.address);
-  } catch {
-    throw new Error('Домен не резолвится. Проверьте адрес.');
-  }
-}
-
-/**
- * Приватные, служебные и петлевые диапазоны, куда публичный сервис ходить не должен.
- * Отдельно закрыт 169.254.169.254 и весь link-local: это адрес сервиса метаданных у всех
- * основных облаков, через который утекают ключи инстанса.
- */
-function isPrivateAddress(address) {
-  if (isIP(address) === 6) {
-    const value = address.toLowerCase();
-    if (value === '::1' || value === '::') return true;
-    if (value.startsWith('fe80')) return true;           // link-local
-    if (/^f[cd]/.test(value)) return true;               // unique local (fc00::/7)
-    // IPv4, завёрнутый в IPv6 (::ffff:127.0.0.1), проверяем как IPv4.
-    const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateAddress(mapped[1]);
-    return false;
-  }
-
-  const parts = address.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return true;
-  const [a, b] = parts;
-
-  if (a === 0) return true;                              // 0.0.0.0/8
-  if (a === 10) return true;                             // приватная сеть
-  if (a === 127) return true;                            // петля
-  if (a === 169 && b === 254) return true;               // link-local и метаданные облака
-  if (a === 172 && b >= 16 && b <= 31) return true;       // приватная сеть
-  if (a === 192 && b === 168) return true;               // приватная сеть
-  if (a === 100 && b >= 64 && b <= 127) return true;      // CGNAT
-  if (a === 192 && b === 0) return true;                 // служебные 192.0.0.0/24 и 192.0.2.0/24
-  if (a === 198 && (b === 18 || b === 19)) return true;   // бенчмарк-сети
-  if (a >= 224) return true;                             // multicast и зарезервированное
-  return false;
-}
-
-/**
- * Отдаёт посетителю только то, что нужно витрине: сводку, топ проблем и разбивку по страницам.
- * Полный результат аудита это десятки килобайт со всем HTML и списками ссылок, гонять их в
- * браузер незачем.
- */
 function compactResult(result, ms) {
   const issues = (result.checks ?? []).filter((check) => check.severity !== 'pass');
   const byCode = new Map();

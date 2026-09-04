@@ -35,6 +35,9 @@
  *                    только с перечисленных адресов
  *   MCP_HOSTED       1 для нашего хостинга: убирает из списка тулы, которым нужен
  *                    локальный Chrome или запись в локальную файловую систему
+ *   MCP_ALLOW_FS          1 открывает fix_template_file, то есть запись файлов по
+ *                         указанному пути. Только для локального запуска и только
+ *                         вместе с MCP_TOKEN: в сети это доступ к файловой системе
  *   MCP_ALLOW_LIGHTHOUSE  1 возвращает run_lighthouse_audit в удалённом режиме. Ставить
  *                    только там, где на сервере реально есть Chrome, иначе тул будет
  *                    падать у каждого пользователя
@@ -60,7 +63,20 @@ const MAX_BODY = 1024 * 1024;
  *   fix_template_file     пишет в локальный файл. На нашем сервере локальных файлов
  *                         пользователя нет, править надо через официальный ucoz-mcp.
  */
-const HOSTED_BLOCKLIST = new Set(['run_lighthouse_audit', 'collect_browser_diagnostics', 'fix_template_file']);
+/**
+ * Тулы, которые не отдаются наружу без явного разрешения.
+ *
+ * Ключевое слово здесь «без явного разрешения». Раньше список применялся только при
+ * MCP_HOSTED=1, а по умолчанию все тулы были открыты. То есть любой, кто просто запускал
+ * веб-сервер командой node src/web-server.mjs, поднимал на 0.0.0.0 эндпоинт, через который
+ * без всякой аутентификации можно было читать и писать файлы на его машине: fix_template_file
+ * пишет по произвольному пути. По умолчанию должно быть безопасно, а не удобно.
+ *
+ * MCP_ALLOW_FS=1 открывает работу с файлами, MCP_ALLOW_LIGHTHOUSE=1 браузерные тулы.
+ * Оба флага осознанные: их выставляет тот, кто понимает, что открывает.
+ */
+const BLOCKED_BY_DEFAULT = new Set(['run_lighthouse_audit', 'collect_browser_diagnostics', 'fix_template_file']);
+const HOSTED_BLOCKLIST = BLOCKED_BY_DEFAULT;
 
 // На хостинге с установленным Chrome (например на своём VPS) Lighthouse работать может,
 // и прятать его там незачем. Запись в локальные файлы остаётся закрытой всегда: файловая
@@ -69,8 +85,13 @@ if (process.env.MCP_ALLOW_LIGHTHOUSE === '1') {
   HOSTED_BLOCKLIST.delete('run_lighthouse_audit');
   HOSTED_BLOCKLIST.delete('collect_browser_diagnostics');
 }
+// Работа с файлами открывается только явно. Этот тул пишет по указанному пути, и отдавать
+// его в сеть без аутентификации нельзя ни в каком режиме.
+if (process.env.MCP_ALLOW_FS === '1') {
+  HOSTED_BLOCKLIST.delete('fix_template_file');
+}
 
-export const publicTools = HOSTED ? tools.filter((tool) => !HOSTED_BLOCKLIST.has(tool.name)) : tools;
+export const publicTools = tools.filter((tool) => !HOSTED_BLOCKLIST.has(tool.name));
 
 /**
  * Обработчик одного HTTP-запроса к эндпоинту MCP.
@@ -172,7 +193,7 @@ async function handleMessage(message) {
 
     if (message.method === 'tools/call') {
       const name = message.params?.name;
-      if (HOSTED && HOSTED_BLOCKLIST.has(name)) {
+      if (HOSTED_BLOCKLIST.has(name)) {
         return jsonRpcError(message.id, -32601,
           `Тул ${name} недоступен в удалённом режиме: ему нужен локальный Chrome или доступ к вашей файловой системе. Поставьте пакет локально, если он нужен.`);
       }

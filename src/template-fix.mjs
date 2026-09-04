@@ -55,12 +55,27 @@ export function fixTemplateContent(original, options = {}) {
 }
 
 function hasMeta(html, attr, value) {
-  const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
+  // Теги внутри комментариев не считаются: закомментированный <!-- <meta ...> --> это
+  // не существующий тег, а заготовка. Раньше правка на такой заготовке молча не
+  // применялась: код видел тег, которого для браузера нет.
+  const tags = stripComments(html).match(/<meta\b[^>]*>/gi) ?? [];
   return tags.some((tag) => String(getAttr(tag, attr)).toLowerCase() === value.toLowerCase());
 }
 
+/** Убирает комментарии, чтобы разбор не считал их содержимое разметкой. */
+function stripComments(html) {
+  return String(html).replace(/<!--[\s\S]*?-->/g, '');
+}
+
 function insertIntoHead(html, line) {
-  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `\n${line}\n</head>`);
+  // Вставляем функцией, а не строкой.
+  //
+  // String.replace обрабатывает в строке замены служебные последовательности: $&, $`, $'
+  // и $1. Значит title или description, в котором встретился знак доллара с такой буквой,
+  // подставлял в шаблон не сам себя, а кусок исходного HTML. Пример: заголовок «Скидка $&
+  // подарок» вставил бы вместо «$&» найденный </head>. Функция замены такие
+  // последовательности не разбирает.
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, () => `\n${line}\n</head>`);
   return `${line}\n${html}`;
 }
 

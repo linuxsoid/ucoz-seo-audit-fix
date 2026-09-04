@@ -13,6 +13,7 @@
 import { auditHtmlBundle, auditSite } from './seo-audit.mjs';
 import { writeReports, toMarkdown, toHtml } from './report.mjs';
 import { runLighthouseAudit } from './lighthouse-audit.mjs';
+import { resolveSafeTarget, assertSafeUrl } from './safe-url.mjs';
 import { planSafeFixes } from './safe-fix-plan.mjs';
 import { fixTemplateContent, fixTemplateFile } from './template-fix.mjs';
 import { compareAudits } from './compare-audits.mjs';
@@ -270,14 +271,48 @@ function trimBrowser(browser) {
   };
 }
 
+/**
+ * Приводит адрес к безопасному виду, если сервер работает удалённо.
+ *
+ * Через публичный MCP адрес присылает кто угодно, и без этой проверки тул audit_site
+ * оказывался обходным путём мимо всей защиты витрины: можно было попросить сервер сходить
+ * на 127.0.0.1 или на сервис метаданных облака и вернуть содержимое.
+ *
+ * Локально проверка не нужна и мешала бы: там человек проверяет свой же сайт на своей же
+ * машине, в том числе на localhost во время разработки.
+ */
+async function auditTarget(url) {
+  return REMOTE_MODE ? resolveSafeTarget(url) : String(url ?? '');
+}
+
+/**
+ * Сколько страниц обходить.
+ *
+ * Потолок нужен по той же причине: на публичном сервере maxPages присылает посторонний,
+ * и без ограничения одним вызовом можно занять сервер обходом на тысячу страниц.
+ *
+ * Мусор вместо числа раньше превращался в NaN, и обход заканчивался, не начавшись:
+ * pages.length < NaN это false с первой же итерации. Тул отвечал «успешно» и нулём
+ * обойдённых страниц, что выглядело как исправный ответ.
+ */
+function pageLimit(value) {
+  const asked = Number(value);
+  const fallback = REMOTE_MODE ? 8 : 25;
+  const limit = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : fallback;
+  return REMOTE_MODE ? Math.min(limit, 20) : Math.min(limit, 200);
+}
+
 export async function callTool(name, args) {
   if (name === 'audit_site') {
-    const result = await auditSite(args.url, {
-      maxPages: Number(args.maxPages ?? 25),
+    const result = await auditSite(await auditTarget(args.url), {
+      maxPages: pageLimit(args.maxPages),
       lighthouse: Boolean(args.lighthouse),
       lighthouseFormFactor: args.lighthouseFormFactor ?? 'mobile',
       lighthouseCategories: args.lighthouseCategories,
-      lighthouseOutput: ['json', 'html']
+      lighthouseOutput: ['json', 'html'],
+      // В удалённом режиме проверяем каждый адрес, по которому идём. Локально этого не
+      // требуется: там адрес вводит сам владелец машины.
+      guard: REMOTE_MODE ? assertSafeUrl : null
     });
     const delivered = await deliverReports(result, args.format);
     // Один и тот же объект под русским и английским ключом это буквально двойной вес
