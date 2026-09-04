@@ -82,12 +82,44 @@ async function runDiagnostics(url, options) {
 async function probe(cdp, target, waitMs, formFactor) {
   const consoleMessages = [];
   const jsErrors = [];
+  // Сколько сообщений выбросили из-за предела. Молчать об этом нельзя: иначе отчёт
+  // выглядит полным, а часть сообщений в него просто не попала.
+  let droppedMessages = 0;
+
+  /**
+   * Складывает сообщение консоли, отдавая приоритет ошибкам.
+   *
+   * Предел нужен: страница с ошибкой в бесконечном цикле выдаёт тысячи сообщений в
+   * секунду. Но раньше при достижении предела выбрасывалось всё подряд, в том числе
+   * ошибки. Болтливая страница забивала список отладочными сообщениями, и отчёт
+   * сообщал «ошибок консоли нет» ровно на тех сайтах, где их было больше всего.
+   *
+   * Теперь ошибка вытесняет из заполненного списка обычное сообщение и попадает в отчёт.
+   */
+  const rememberConsole = (item) => {
+    if (consoleMessages.length < CONSOLE_LIMIT) {
+      consoleMessages.push(item);
+      return;
+    }
+    const isError = item.level === 'error' || item.level === 'assert';
+    if (!isError) {
+      droppedMessages += 1;
+      return;
+    }
+    const victim = consoleMessages.findIndex((m) => m.level !== 'error' && m.level !== 'assert');
+    if (victim === -1) {
+      droppedMessages += 1;
+      return;
+    }
+    consoleMessages.splice(victim, 1);
+    consoleMessages.push(item);
+    droppedMessages += 1;
+  };
   const requests = new Map();
   const startedAt = Date.now();
 
   cdp.on('Runtime.consoleAPICalled', (p) => {
-    if (consoleMessages.length >= CONSOLE_LIMIT) return;
-    consoleMessages.push({
+    rememberConsole({
       level: p.type,
       text: (p.args ?? []).map(describeRemoteObject).join(' ').slice(0, 500),
       source: 'console',
@@ -97,6 +129,9 @@ async function probe(cdp, target, waitMs, formFactor) {
 
   cdp.on('Runtime.exceptionThrown', (p) => {
     const d = p.exceptionDetails ?? {};
+    // Предел и здесь: страница в цикле бросает исключения тысячами, а память процесса
+    // общая для всех, кто в этот момент проверяет свой сайт.
+    if (jsErrors.length >= CONSOLE_LIMIT) { droppedMessages += 1; return; }
     jsErrors.push({
       text: (d.exception?.description ?? d.text ?? 'Ошибка JavaScript').slice(0, 800),
       url: d.url ?? d.stackTrace?.callFrames?.[0]?.url ?? '',
@@ -107,9 +142,8 @@ async function probe(cdp, target, waitMs, formFactor) {
   // Сообщения самого браузера: смешанный контент, нарушения CSP, отказы загрузки.
   // Их в console.log не видно, а для диагностики сайта это часто самое важное.
   cdp.on('Log.entryAdded', (p) => {
-    if (consoleMessages.length >= CONSOLE_LIMIT) return;
     const e = p.entry ?? {};
-    consoleMessages.push({
+    rememberConsole({
       level: e.level,
       text: String(e.text ?? '').slice(0, 500),
       source: e.source ?? 'browser',
@@ -213,9 +247,13 @@ async function probe(cdp, target, waitMs, formFactor) {
     // недогруженной странице выглядит законченным, а данных в нём меньше, чем на самом
     // деле, и человек об этом не догадается.
     loadComplete: loaded,
-    loadNote: loaded
-      ? ''
-      : 'Страница не сообщила о полной загрузке за 30 секунд. Данные собраны на этот момент, часть поздних запросов и ошибок могла не попасть в отчёт.',
+    loadNote: [
+      loaded ? '' : 'Страница не сообщила о полной загрузке за 30 секунд. Данные собраны на этот момент, часть поздних запросов и ошибок могла не попасть в отчёт.',
+      // О выброшенных сообщениях говорим прямо. Молчать нельзя: отчёт выглядел бы полным,
+      // а часть сообщений в него просто не попала, и число ошибок было бы заниженным.
+      droppedMessages ? `Страница выдала слишком много сообщений в консоль, в отчёт попали не все: пропущено ${droppedMessages}. Ошибки при этом сохранены в первую очередь.` : ''
+    ].filter(Boolean).join(' '),
+    droppedMessages,
     har: buildHar(target, list),
     // Консольный лог обычным текстом, как его сохраняет DevTools через «Save as».
     consoleLog: buildConsoleLog(target, consoleMessages, jsErrors),

@@ -736,7 +736,7 @@ async function handleDeepAudit(req, res) {
         categories: lighthouse.summary?.categories ?? [],
         metrics: lighthouse.summary?.metrics ?? [],
         topIssues: (lighthouse.summary?.topIssues ?? []).slice(0, 8)
-      } : { unavailable: lighthouse?.reason ?? 'Lighthouse недоступен.' },
+      } : { unavailable: lighthouse?.message ?? 'Lighthouse недоступен.' },
       browser: browser?.available ? {
         summary: browser.summary,
         loadComplete: browser.loadComplete,

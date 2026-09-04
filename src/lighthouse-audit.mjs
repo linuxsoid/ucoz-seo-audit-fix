@@ -266,6 +266,48 @@ const BLOCKING_AUDITS = new Set([
   'hreflang'
 ]);
 
+/**
+ * Отбирает рекомендации Lighthouse для отчёта.
+ *
+ * Список ограничен: двенадцати пунктов достаточно, чтобы понять, чем заняться, а полный
+ * разбор всех аудитов человек всё равно не прочитает и он есть в самом отчёте Lighthouse.
+ *
+ * Порядок отбора важен, и раньше он был неверным. Сортировка шла по величине экономии
+ * времени загрузки, а у блокеров индексации экономии нет вообще: ноль. Поэтому на сайте
+ * с длинным списком рекомендаций единственный настоящий блокер уезжал в конец списка и
+ * обрезался. То есть терялась именно та проверка, ради которой отчёт и читают.
+ *
+ * Теперь блокеры идут первыми и в обрезку не попадают, а остальное сортируется как раньше.
+ * Функция экспортируется, чтобы обрезку можно было проверить тестом: раньше она жила
+ * внутри и тест до неё не доставал.
+ */
+export function pickTopIssues(audits) {
+  const failing = Object.values(audits ?? {})
+    .filter((audit) => audit.score !== null && audit.score !== undefined && audit.score < 0.9)
+    .filter((audit) => audit.scoreDisplayMode !== 'notApplicable')
+    .map((audit) => ({
+      id: audit.id,
+      title: audit.title,
+      score: Math.round(audit.score * 100),
+      displayValue: formatDisplayValue(audit.displayValue ?? ''),
+      savingsMs: audit.details?.overallSavingsMs ?? 0,
+      savingsBytes: audit.details?.overallSavingsBytes ?? 0,
+      severity: BLOCKING_AUDITS.has(audit.id) ? 'critical' : 'recommended',
+      message: formatAuditMessage(audit),
+      fix: AUDIT_FIXES[audit.id] ?? 'Откройте HTML-отчет Lighthouse и примените рекомендацию после проверки влияния на шаблоны.',
+      // Оригинальные формулировки Lighthouse. Нужны для отчёта на английском: без них
+      // туда попадал наш русский текст, и «английский» отчёт был наполовину русским.
+      messageEn: [audit.title, audit.displayValue ? `(${audit.displayValue})` : ''].filter(Boolean).join(' '),
+      fixEn: 'Open the Lighthouse HTML report and apply the recommendation after checking how it affects templates.'
+    }));
+
+  const byWeight = (a, b) => b.savingsMs - a.savingsMs || b.savingsBytes - a.savingsBytes || a.score - b.score;
+  const blockers = failing.filter((x) => x.severity === 'critical').sort(byWeight);
+  const rest = failing.filter((x) => x.severity !== 'critical').sort(byWeight);
+
+  return [...blockers, ...rest].slice(0, Math.max(12, blockers.length));
+}
+
 function summarizeLighthouse(lhr) {
   const categories = Object.entries(lhr.categories ?? {}).map(([id, category]) => ({
     id,
@@ -286,26 +328,7 @@ function summarizeLighthouse(lhr) {
     })
     .filter(Boolean);
 
-  const topIssues = Object.values(lhr.audits ?? {})
-    .filter((audit) => audit.score !== null && audit.score !== undefined && audit.score < 0.9)
-    .filter((audit) => audit.scoreDisplayMode !== 'notApplicable')
-    .map((audit) => ({
-      id: audit.id,
-      title: audit.title,
-      score: Math.round(audit.score * 100),
-      displayValue: formatDisplayValue(audit.displayValue ?? ''),
-      savingsMs: audit.details?.overallSavingsMs ?? 0,
-      savingsBytes: audit.details?.overallSavingsBytes ?? 0,
-      severity: BLOCKING_AUDITS.has(audit.id) ? 'critical' : 'recommended',
-      message: formatAuditMessage(audit),
-      fix: AUDIT_FIXES[audit.id] ?? 'Откройте HTML-отчет Lighthouse и примените рекомендацию после проверки влияния на шаблоны.',
-      // Оригинальные формулировки Lighthouse. Нужны для отчёта на английском: без них
-      // туда попадал наш русский текст, и «английский» отчёт был наполовину русским.
-      messageEn: [audit.title, audit.displayValue ? `(${audit.displayValue})` : ''].filter(Boolean).join(' '),
-      fixEn: 'Open the Lighthouse HTML report and apply the recommendation after checking how it affects templates.'
-    }))
-    .sort((a, b) => b.savingsMs - a.savingsMs || b.savingsBytes - a.savingsBytes || a.score - b.score)
-    .slice(0, 12);
+  const topIssues = pickTopIssues(lhr.audits);
 
   return {
     categories,

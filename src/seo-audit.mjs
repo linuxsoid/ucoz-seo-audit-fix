@@ -271,8 +271,19 @@ async function auditSiteFiles(origin, guard) {
     if (!/sitemap:/i.test(robots.text)) {
       checks.push(issue('recommended', 'site.robots_no_sitemap', `${origin}/robots.txt`, 'В robots.txt нет ссылки на sitemap.xml.', 'Добавьте директиву Sitemap.'));
     }
-    if (/disallow:\s*\/\s*$/im.test(robots.text)) {
-      checks.push(issue('critical', 'site.robots_blocks_all', `${origin}/robots.txt`, 'robots.txt, похоже, закрывает от индексации весь сайт.', 'Проверьте Disallow: / перед продвижением сайта.'));
+    // Запрет учитываем только в блоке, который относится ко всем роботам.
+    //
+    // Раньше искали Disallow: / по всему файлу. Но robots.txt состоит из блоков, и запрет
+    // действует только на тот User-agent, под которым он стоит. Строки вида
+    //   User-agent: AhrefsBot
+    //   Disallow: /
+    // это обычная практика: владелец закрывает сайт от сканеров конкурентов, а не от
+    // поиска. Мы же объявляли такой сайт полностью закрытым от индексации, ставили
+    // критичный блокер и сворачивали весь остальной отчёт: смысла чинить мета-теги
+    // закрытой страницы нет, поэтому человек видел только этот блокер. Ложная тревога
+    // в самом громком месте отчёта.
+    if (robotsBlocksEveryone(robots.text)) {
+      checks.push(issue('critical', 'site.robots_blocks_all', `${origin}/robots.txt`, 'robots.txt закрывает от индексации весь сайт для всех поисковых систем.', 'Уберите строку Disallow: / из блока User-agent: * и проверьте сайт заново.'));
     }
   }
 
@@ -373,9 +384,10 @@ function auditHtml(page, links) {
     `Длина description ${description.length} символов: «${description}»`, 'Ориентир: примерно 50-170 символов.', { value: description }));
   else checks.push(pass('meta.description_ok', page.url, 'Meta description заполнен.'));
 
+  // Про несколько H1 говорит блок выше, тут только отсутствие и порядок. Раньше замечание
+  // добавлялось в обоих местах, и одна проблема считалась в сводке дважды.
   if (!h1s.length) checks.push(issue('recommended', 'content.h1_missing', page.url, 'Отсутствует H1.', 'Добавьте один понятный заголовок H1.'));
-  else if (h1s.length > 1) checks.push(issue('recommended', 'content.h1_multiple', page.url, `Найдено H1: ${h1s.length}.`, 'По возможности оставьте один основной H1.'));
-  else checks.push(pass('content.h1_ok', page.url, 'На странице есть один H1.'));
+  else if (h1s.length === 1) checks.push(pass('content.h1_ok', page.url, 'На странице есть один H1.'));
 
   if (!lang) checks.push(issue('recommended', 'html.lang_missing', page.url, 'У тега html отсутствует атрибут lang.', 'Добавьте lang в тег <html>.'));
   if (!getMeta(html, 'name', 'viewport')) checks.push(issue('critical', 'meta.viewport_missing', page.url, 'Отсутствует meta viewport.', 'Добавьте responsive viewport meta.'));
@@ -790,9 +802,108 @@ function getLinkRel(html, rel) {
   return tag ? decodeHtml(getAttr(tag, 'href') ?? '') : '';
 }
 
+/**
+ * Ищет тег по значению атрибута.
+ *
+ * Комментарии выбрасываем перед поиском. Тег внутри <!-- --> для браузера и для
+ * поисковика не существует, а разбор его находил, и это врало в обе стороны:
+ * закомментированный noindex давал ложный блокер «страница закрыта от поиска» и
+ * сворачивал весь остальной отчёт, а закомментированный canonical скрывал настоящую
+ * проблему. Заготовки в комментариях в шаблонах конструктора обычное дело.
+ */
 function findTag(html, tagName, attr, value) {
-  const tags = html.match(new RegExp(`<${tagName}\\b[^>]*>`, 'gi')) ?? [];
+  const tags = matchTags(stripComments(html), tagName);
   return tags.find((tag) => String(getAttr(tag, attr)).toLowerCase() === value.toLowerCase());
+}
+
+/**
+ * Собирает теги, не обрезаясь на символе больше внутри значения атрибута.
+ *
+ * Простое `<meta[^>]*>` останавливается на первом же символе больше, а он бывает внутри
+ * кавычек: description вида «Цена > 1000 рублей» обрезал тег, и дальше читался огрызок.
+ * Замерено: описание из шестидесяти символов превращалось в пять, и человек получал
+ * замечание про слишком короткое описание там, где оно нормальной длины.
+ *
+ * Поэтому идём по строке и следим за кавычками: внутри них символ больше это просто символ.
+ */
+function matchTags(html, tagName) {
+  const out = [];
+  const open = new RegExp(`<${tagName}\\b`, 'gi');
+  let m;
+  while ((m = open.exec(html))) {
+    let quote = null;
+    for (let i = m.index + m[0].length; i < html.length; i += 1) {
+      const ch = html[i];
+      if (quote) {
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") { quote = ch; continue; }
+      if (ch === '>') {
+        out.push(html.slice(m.index, i + 1));
+        open.lastIndex = i + 1;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** Убирает комментарии, чтобы разбор не принимал их содержимое за разметку. */
+function stripComments(html) {
+  return String(html).replace(/<!--[\s\S]*?-->/g, '');
+}
+
+/**
+ * Закрывает ли robots.txt весь сайт для всех поисковых систем.
+ *
+ * Файл читается блоками: одна или несколько строк User-agent, потом правила для них.
+ * Нас интересует только блок с User-agent: *, потому что запрет под именем конкретного
+ * робота это не закрытие сайта от поиска, а закрытие от одного сканера.
+ */
+export function robotsBlocksEveryone(text) {
+  const lines = String(text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean);
+
+  // Файл читается группами. Группа это одна или несколько подряд идущих строк User-agent
+  // и следующие за ними правила: правила действуют на ВСЕХ агентов, перечисленных перед
+  // ними. Поэтому имена накапливаем, а начало новой группы определяем по строке
+  // User-agent, идущей сразу после правила.
+  let agents = [];
+  let afterRule = false;
+  let disallowsAll = false;
+  let allowsRoot = false;
+
+  for (const line of lines) {
+    const agent = line.match(/^user-agent:\s*(.+)$/i);
+    if (agent) {
+      if (afterRule) {
+        agents = [];
+        afterRule = false;
+      }
+      agents.push(agent[1].trim());
+      continue;
+    }
+
+    const rule = line.match(/^(disallow|allow):\s*(.*)$/i);
+    if (!rule) continue;
+    afterRule = true;
+
+    // Группа без единой строки User-agent правил не задаёт: по спецификации такие строки
+    // игнорируются, а не применяются ко всем.
+    if (!agents.includes('*')) continue;
+
+    // Решаем не по ходу, а по всей группе: Allow может стоять ПОСЛЕ Disallow, и ранний
+    // выход дал бы неверный ответ.
+    if (rule[1].toLowerCase() === 'disallow' && rule[2].trim() === '/') disallowsAll = true;
+    // Allow с корнем снимает полный запрет: по правилам robots.txt при равной длине маски
+    // разрешение сильнее запрета, то есть сайт закрыт не целиком.
+    if (rule[1].toLowerCase() === 'allow' && rule[2].trim() === '/') allowsRoot = true;
+  }
+
+  return disallowsAll && !allowsRoot;
 }
 
 function getAttr(tag, attr) {
