@@ -5,13 +5,20 @@
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="https://logo.ucoz.com/LOGOBlack.png">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>uCoz SEO Audit & Fix MCP</title>
-  <meta name="description" content="Публичный MCP-сервер для SEO-аудита uCoz: отчеты, группировка по страницам и шаблонам, безопасный план исправлений.">
+  <!-- Заголовок вкладки, сниппет в поиске и превью ссылки в мессенджере написаны для
+       человека, а не для разработчика. Раньше здесь стояло «uCoz SEO Audit & Fix MCP» и
+       «safe-fix workflow через MCP»: человек, которому нужна проверка сайта, по такому
+       описанию не понимает, что попал куда надо, и не нажимает на ссылку. Это первые
+       десять секунд знакомства с продуктом, и начинаются они не с заголовка страницы. -->
+  <title>Проверить сайт на SEO-ошибки бесплатно</title>
+  <meta name="description" content="Вставьте адрес сайта и через минуту получите список того, что мешает ему показываться в поиске: понятными словами, с объяснением, чем каждая проблема грозит. Бесплатно, без регистрации.">
   <link rel="canonical" href="https://seoaudit.ucoz.net/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="uCoz SEO Audit & Fix MCP">
-  <meta property="og:description" content="SEO-аудит и safe-fix workflow для uCoz через MCP.">
+  <meta property="og:title" content="Проверить сайт на SEO-ошибки бесплатно">
+  <meta property="og:description" content="Вставьте адрес сайта и через минуту узнайте, что мешает ему показываться в поиске. Понятными словами, бесплатно, без регистрации.">
   <meta property="og:url" content="https://seoaudit.ucoz.net/">
+  <meta property="og:site_name" content="SEO Audit & Fix">
+  <meta property="og:locale" content="ru_RU">
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json">
   {
@@ -189,6 +196,11 @@
     section { padding: 34px 0; }
     h2 { font-size: 30px; margin: 0 0 18px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    /* Две колонки и выравнивание карточек по верху: карточки с блоками кода бывают
+       разной высоты, и растянутая до соседа карточка получала внизу пустоту в полэкрана.
+       Объявление стоит ЗДЕСЬ, до медиазапроса: ниже него оно побеждало бы по порядку
+       и оставляло на телефоне две колонки по сто семьдесят пикселей. */
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -268,6 +280,8 @@
       /* На телефоне кнопка проверки во всю ширину: так по ней не промахнуться. */
       .check-form button { width: 100%; }
       .hero-facts { flex-direction: column; gap: 7px; }
+      /* В столбик шапка выше, поэтому и отступ при прокрутке больше. */
+      .check-out { scroll-margin-top: 190px; }
     }
   
     /* Поле ввода это главное действие страницы, и выглядеть оно должно соответственно:
@@ -291,9 +305,57 @@
     .check-form button[disabled] { opacity: .6; cursor: progress; filter: none; }
     .check-note { color: var(--muted); font-size: 14px; margin: 0; }
 
-    /* Две колонки и выравнивание карточек по верху: карточки с блоками кода бывают
-       разной высоты, и растянутая до соседа карточка получала внизу пустоту в полэкрана. */
-    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    /* Кнопка, которая выглядит ссылкой. Нужна там, где элемент раскрывает блок на той же
+       странице: это действие, а не переход, и с клавиатуры оно должно работать как кнопка.
+       Раньше здесь стояли ссылки с javascript:void(0), и диктор читал их как переход. */
+    .linkish { border: 0; background: none; padding: 0; font: inherit; color: var(--accent);
+      cursor: pointer; text-decoration: underline; }
+    .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Видимый фокус на всём, чем можно пользоваться с клавиатуры. Раньше свой стиль был
+       только у поля ввода, а на остальном браузер рисовал что придётся или ничего. */
+    a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+      outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+    }
+    .navlinks a { padding: 6px 2px; }
+
+    /* Прокручиваемую таблицу надо уметь прокрутить с клавиатуры, а для этого она должна
+       получать фокус. Без tabindex до содержимого широкой таблицы не добраться вообще. */
+    .matrix-scroll:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* Человек мог попросить систему не показывать анимацию: у части людей от вращения
+       кружится голова. Крутилку заменяем на спокойное мигание. */
+    @media (prefers-reduced-motion: reduce) {
+      .spin { animation: none; border-top-color: var(--accent); opacity: .7; }
+      * { scroll-behavior: auto !important; }
+    }
+
+    /* Пример отчёта. Показываем настоящие формулировки, а не выдуманные: человек должен
+       увидеть ровно то, что получит. Раньше на первом экране стояла декоративная картинка
+       с жаргоном, а после её удаления доказательства на странице не осталось совсем. */
+    .sample { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px; box-shadow: var(--shadow); }
+    .sample-head { font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); margin-bottom: 12px; }
+    .sample-verdict { border-left: 4px solid var(--warn); padding: 2px 0 2px 14px; margin-bottom: 14px; }
+    .sample-verdict b { display: block; font-size: 18px; margin-bottom: 4px; }
+    .sample-verdict span { color: var(--muted); font-size: 14px; }
+    .sample-counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .sample-counts div { flex: 1 1 130px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .sample-counts b { display: block; font-size: 24px; line-height: 1.1; }
+    .sample-counts span { color: var(--muted); font-size: 13px; }
+    .sample-job { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+    .sample-job p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    .sample-job-top { display: flex; gap: 9px; align-items: baseline; }
+    .sample-num { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; }
+
+    /* Свёрнутые разделы для разработчика. Нужны редко, а место занимали всегда. */
+    .dev-block { border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      padding: 14px 16px; margin-top: 14px; }
+    .dev-block > summary { cursor: pointer; font-weight: 700; }
+    .dev-block[open] > summary { margin-bottom: 12px; }
 
     .to-top { position: fixed; right: 18px; bottom: 18px; z-index: 20; width: 46px; height: 46px;
       border-radius: 50%; background: var(--ink); color: var(--bg); text-decoration: none;
@@ -321,7 +383,9 @@
     .done-actions { display: flex; gap: 10px; flex-wrap: wrap; }
     .done-actions .btn { min-height: 48px; padding: 0 20px; }
     .done-actions .btn.primary { font-size: 16px; }
-    .check-out { margin-top: 20px; scroll-margin-top: 80px; }
+    /* Отступ сверху при автопрокрутке. Шапка липкая, и на телефоне она в столбик:
+       восьмидесяти пикселей не хватало, сводка уезжала под неё. */
+    .check-out { margin-top: 20px; scroll-margin-top: 96px; }
     .spin { display:inline-block; width:14px; height:14px; margin-right:9px;
       vertical-align:-2px; border:2px solid var(--line); border-top-color: var(--accent);
       border-radius:50%; animation: spin .8s linear infinite; }
@@ -464,7 +528,9 @@
           <li>Отчёт можно показать клиенту или отдать своему ИИ</li>
         </ul>
 
-        <div class="check-out" id="check-out"></div>
+        <!-- Результат дорисовывается сам, поэтому область объявлена живой: без этого
+             человек с экранным диктором не узнает, что проверка что-то показала. -->
+        <div class="check-out" id="check-out" aria-live="polite" aria-busy="false"></div>
       </div>
     </section>
 
@@ -479,132 +545,51 @@
       </div>
     </section>
 
-    <section id="modes">
-      <div class="wrap">
-        <h2>Как это устроено: три отдельные вещи</h2>
-        <p class="lead">Их легко перепутать, поэтому по порядку. Две первые находят проблемы,
-          третья их чинит. Каждая работает сама по себе, вместе они нужны только для
-          автоматических правок.</p>
 
-        <div class="grid">
-          <article class="card">
-            <h3>1. Проверка на этой странице</h3>
-            <p><b>Нужно от вас: ничего.</b> Ни установки, ни регистрации, ни ключей, ни доступа
-              к панели сайта.</p>
-            <p>Наш сервер сам заходит на ваш сайт снаружи и читает публичные страницы ровно так
-              же, как их видит поисковик. Ничего в сайте не меняется.</p>
-            <p class="hint">Работает с любым сайтом в интернете, не только с uCoz.</p>
-          </article>
 
-          <article class="card">
-            <h3>2. SEO MCP: тот же аудит, но для вашего ИИ</h3>
-            <p><b>Нужно от вас: вставить один адрес</b> в Codex, Cursor или Claude. Скачивать и
-              устанавливать нечего.</p>
-            <p>Проверки те же самые. Разница в том, кто их запускает: не вы руками через форму,
-              а ваш ИИ-помощник. Он сразу разбирает отчёт и продолжает работу дальше.</p>
-            <p class="hint">Это наш отдельный продукт. Для него uCoz MCP не нужен.</p>
-          </article>
 
-          <article class="card">
-            <h3>3. Официальный uCoz MCP: чтобы починить</h3>
-            <p><b>Нужно от вас: подключить его и вписать API-ключ вашего сайта на uCoz.</b></p>
-            <p>Это <b>не наш продукт</b>, а официальный MCP платформы uCoz. Он открывает шаблоны
-              и файлы сайта изнутри. Первые два пункта проблемы только <b>находят</b>, внести
-              правку в шаблон может лишь он.</p>
-            <p class="hint">Нужен, только если хотите автоматические правки. Для проверки не нужен.</p>
-          </article>
-        </div>
 
-        <div class="card notice" style="margin-top:14px">
-          <h3>Почему связка сильнее, чем каждый по отдельности</h3>
-          <p>Проверка снаружи видит <b>страницы</b>, то есть следствие. Шаблон это <b>причина</b>:
-            одна правка в нём убирает проблему сразу на всех страницах, где она повторяется.
-            Поэтому находит наш инструмент, а исправляет официальный uCoz MCP, и оба нужны только
-            для этого сценария.</p>
-        </div>
 
-        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
-          <thead><tr><th>Что делаем</th><th>Что для этого нужно</th></tr></thead>
-          <tbody>
-            <tr><td>Проверить сайт и получить отчёт</td><td><b>Ничего.</b> Форма выше</td></tr>
-            <tr><td>Проверять из своего редактора кода</td><td>Один адрес нашего MCP</td></tr>
-            <tr><td>Проверить сайт не на uCoz</td><td>Тоже ничего, работает с любым сайтом</td></tr>
-            <tr><td>Увидеть проблему в самом шаблоне, а не на странице</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
-            <tr><td>Чтобы правки вносились автоматически</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
-          </tbody>
-        </table></div>
-      </div>
-    </section>
 
-    <section id="download">
-      <div class="wrap">
-        <h2>Что внутри</h2>
-        <div class="grid">
-          <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
-          <article class="card"><h3>Проверка по URL без установки</h3><p>Публичная форма на этой странице: вводите адрес, через несколько секунд видите список проблем. Ничего ставить не нужно, сайт при проверке только читается.</p></article>
-          <article class="card"><h3>Удобные форматы отчёта</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
-          <article class="card"><h3>Lighthouse без DevTools</h3><p>Не нужно открывать инструменты разработчика и гонять тесты вручную: Performance, SEO, Accessibility, Best Practices и метрики загрузки попадают в отчёт одним нажатием.</p></article>
-          <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
-          <article class="card wide"><h3>Интеграция с uCoz</h3><p>Сама проверка сайту ничего не требует: страницы читаются как их видит поисковик. Официальный <code>ucoz-mcp</code> подключается отдельно и нужен только для того, чтобы прочитать шаблоны и файлы по FTP и внести в них правки после вашего подтверждения.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
-          <article class="card"><h3>Проверка после исправлений</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section id="idea">
-      <div class="wrap">
-        <h2>Возможности сервиса</h2>
-        <div class="matrix-scroll"><table class="matrix">
-          <thead><tr><th>Требование</th><th>Статус в MVP</th><th>Как реализовано</th></tr></thead>
-          <tbody>
-            <tr><td>Чтение сайта</td><td>Работает без ключей</td><td>Публичные страницы читаются обычными запросами, как их видит поисковик. Ни ключа, ни доступа к панели для этого не нужно. Чтение самих шаблонов и файлов по FTP это уже <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">официальный uCoz MCP</a>, он подключается отдельно.</td></tr>
-            <tr><td>Технический и on-page SEO-аудит</td><td>Работает</td><td>Проверяются meta, H1, canonical, Open Graph, Twitter Card, Schema.org, alt, robots, sitemap и внутренние ссылки.</td></tr>
-            <tr><td>Lighthouse / PageSpeed слой</td><td>Добавлен</td><td><code>run_lighthouse_audit</code> запускает Lighthouse через Chrome и возвращает русскую сводку по Performance, SEO, Accessibility, Best Practices и lab metrics.</td></tr>
-            <tr><td>Critical / Recommended</td><td>Работает</td><td>Каждое замечание получает приоритет, а отчет показывает общую сводку и типы проблем.</td></tr>
-            <tr><td>Audit → fix → re-audit</td><td>Работает как агентный сценарий</td><td><code>audit_site</code>, <code>plan_safe_fixes</code>, preview diff, approve, patch через <code>ucoz-mcp</code>, затем <code>compare_audits</code>.</td></tr>
-            <tr><td>Backup / diff / approve</td><td>Заложено в workflow</td><td>Safe-fix план не пишет на сайт сам. Перед изменениями используется backup в <code>ucoz-mcp</code>, просмотр diff и подтверждение человека.</td></tr>
-            <tr><td>Публичный отчет</td><td>Работает</td><td>Генерируются JSON, Markdown и HTML. HTML можно показать клиенту как понятный результат аудита.</td></tr>
-          </tbody>
-        </table></div>
-        <div class="grid status" style="margin-top:14px">
-          <article class="card"><h3>Что доступно сейчас</h3><p>Проверка сайта по адресу без установки. Мета-теги, заголовки, разметка, индексируемость, сертификат, перелинковка, контакты и счётчик. Глубокая проверка открывает страницу в настоящем браузере и добавляет Lighthouse, Core Web Vitals, логи консоли и сетевые запросы. Через MCP тот же аудит работает из вашего редактора кода, вместе с подготовкой безопасных правок и повторной проверкой.</p></article>
-          <article class="card"><h3>В планах</h3><p>Отчёт в PDF, автоматическая генерация Schema.org, проверка орфографии в текстах и массовый прогон по списку сайтов сразу.</p></article>
-          <article class="card wide"><h3>Что не входит в сервис и почему</h3><p>Сервис смотрит на сам сайт: то, что можно увидеть в его страницах, файлах и в браузере. Всё, для чего нужны чужие базы или доступ к вашим кабинетам, мы не делаем и не обещаем.</p>
-            <ul class="feature-list">
-              <li><strong>Ссылочный профиль</strong><span>Доноры, анкоры, токсичные ссылки. Нужна платная база вроде Ahrefs или Serpstat, своей у нас нет.</span></li>
-              <li><strong>Позиции по запросам</strong><span>Требуется съём выдачи по регионам и устройствам. Смотрите в Яндекс.Вебмастере и Google Search Console.</span></li>
-              <li><strong>Поведенческие показатели</strong><span>Отказы, глубина просмотра, конверсия. Эти данные есть только в вашей Метрике или Google Analytics.</span></li>
-              <li><strong>Уникальность текстов</strong><span>Проверка на заимствования это отдельный сервис, например Text.ru.</span></li>
-              <li><strong>Репутация и упоминания</strong><span>Отзывы, СМИ, тональность в выдаче. Это работа человека, а не проверки сайта.</span></li>
-              <li><strong>Безопасность движка</strong><span>Уязвимости, брутфорс, резервные копии. На uCoz за это отвечает сама платформа.</span></li>
-            </ul>
-            <p class="hint">И отдельно: сервис не гарантирует рост позиций и не переписывает контент сайта за вас.</p>
-          </article>
-        </div>
-      </div>
-    </section>
 
     <section id="report">
       <div class="wrap">
-        <h2>Что вы увидите в отчёте</h2>
-        <div class="grid">
-          <article class="card"><h3>Сводка</h3><p>Верх отчета показывает количество Critical, Recommended и Passed, чтобы сразу понять масштаб проблемы.</p></article>
-          <article class="card"><h3>Группировка по страницам</h3><p>Замечания собираются под публичным URL страницы. Служебные ссылки редактирования uCoz не смешиваются с реальными страницами сайта.</p></article>
-          <article class="card"><h3>Где внести изменение</h3><p>Для типовых адресов uCoz отчёт подсказывает, в каком модуле и шаблоне искать: страница товара, каталог, регистрация, редактор страниц. Это подсказка по виду адреса, а не чтение вашего шаблона: чтобы открыть сам шаблон, нужен официальный uCoz MCP.</p></article>
-          <article class="card"><h3>Lighthouse</h3><p>Отдельный блок показывает оценки, Core Web Vitals/lab metrics и главные рекомендации без ручного запуска тестов.</p></article>
+        <h2>Как выглядит результат</h2>
+        <p class="lead">Это не выгрузка данных, а разбор: сверху вывод одной фразой, дальше
+          дела по порядку важности. У каждой проблемы сказано, чем именно она вам мешает.</p>
+
+        <div class="sample" aria-label="Пример отчёта">
+          <div class="sample-head">Пример отчёта, реальные формулировки</div>
+          <div class="sample-verdict">
+            <b>Есть 2 проблемы, которые мешают поиску</b>
+            <span>Начните с них: они влияют на то, попадёт ли сайт в поиск и как он там выглядит.</span>
+          </div>
+          <div class="sample-counts">
+            <div><b>2</b><span>срочные проблемы</span></div>
+            <div><b>21</b><span>улучшения</span></div>
+            <div><b>18</b><span>проверок пройдено</span></div>
+          </div>
+          <div class="sample-job">
+            <div class="sample-job-top"><span class="sample-num">1</span><b>У страницы нет описания для поиска</b></div>
+            <p>Поисковик соберёт текст под ссылкой сам, из случайного места страницы. Обычно
+              получается плохо.</p>
+            <p class="hint">Затронуто 8 страниц · нужно написать текст · <code>meta.description_missing</code></p>
+          </div>
+          <div class="sample-job">
+            <div class="sample-job-top"><span class="sample-num">2</span><b>Ссылка на сайт плохо выглядит в мессенджерах</b></div>
+            <p>Когда ссылку отправляют в Телеграм или ВКонтакте, вместо картинки с заголовком
+              разворачивается голый адрес. По такой ссылке нажимают заметно реже.</p>
+            <p class="hint">Затронуто 8 страниц · правится в шаблоне один раз для всех страниц</p>
+          </div>
         </div>
-        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
-          <thead><tr><th>Блок отчета</th><th>Зачем нужен</th><th>Пример</th></tr></thead>
-          <tbody>
-            <tr><td>Публичные страницы</td><td>Все проблемы одной страницы в одном месте.</td><td><code>/shop/2/desc/product</code> и список замечаний к ней.</td></tr>
-            <tr><td>Шаблоны и источники</td><td>Проблемы самих HTML-шаблонов. Появляется только при подключённом официальном uCoz MCP: без него шаблоны читать нечем.</td><td>“Страница товара”, <code>module_id=20</code>, <code>template_id=4</code>.</td></tr>
-            <tr><td>Lighthouse / производительность</td><td>Performance, SEO, Accessibility, Best Practices и основные метрики.</td><td>LCP, FCP, CLS, TBT, Speed Index, вес страницы.</td></tr>
-            <tr><td>Пропущенные служебные ссылки</td><td>Показывает, что админские URL были найдены, но исключены из публичного SEO-аудита.</td><td><code>/index/31-...</code> не считается страницей сайта.</td></tr>
-          </tbody>
-        </table></div>
+
+        <div class="grid" style="margin-top:16px">
+          <article class="card"><h3>Смотрите сразу на сайте</h3><p>После проверки открывается страница с отчётом. Скачивать и искать файл в загрузках не нужно.</p></article>
+          <article class="card"><h3>Скачивается одним архивом</h3><p>Внутри три папки: для человека, для ИИ и исходные данные. В каждой лежит короткая записка, что там и зачем.</p></article>
+          <article class="card"><h3>Можно показать клиенту</h3><p>Отчёт в HTML открывается двойным щелчком и выглядит как готовый документ, а не как выгрузка из программы.</p></article>
+        </div>
       </div>
     </section>
-
     <section>
       <div class="wrap">
         <h2>Что проверяется</h2>
@@ -625,10 +610,31 @@
         </div>
       </div>
     </section>
-
+    <section id="limits">
+      <div class="wrap">
+        <h2>Чего мы не проверяем и почему</h2>
+        <p class="lead">Мы смотрим на сам сайт: на то, что видно в его страницах, файлах и в
+          браузере. Всё, для чего нужны чужие платные базы или доступ к вашим кабинетам, мы
+          не делаем и не обещаем. Ниже честный список с подсказкой, куда идти за каждым пунктом.</p>
+        <ul class="feature-list">
+          <li><strong>Ссылочный профиль</strong><span>Кто на вас ссылается и нет ли плохих ссылок. Нужна платная база вроде Ahrefs или Serpstat, своей у нас нет.</span></li>
+          <li><strong>Позиции по запросам</strong><span>На каком месте вы в поиске. Это видно в Яндекс.Вебмастере и Google Search Console, они бесплатные.</span></li>
+          <li><strong>Поведение посетителей</strong><span>Сколько людей уходит сразу, что смотрит, что покупает. Эти данные есть только в вашей Метрике или Google Analytics.</span></li>
+          <li><strong>Уникальность текстов</strong><span>Не скопирован ли текст. Это отдельные сервисы, например Text.ru.</span></li>
+          <li><strong>Репутация и упоминания</strong><span>Отзывы и что о вас пишут. Это работа человека, а не проверки сайта.</span></li>
+          <li><strong>Безопасность движка</strong><span>Уязвимости и резервные копии. На uCoz за это отвечает сама платформа.</span></li>
+        </ul>
+        <p class="hint">И отдельно, чтобы не было недопонимания: мы не обещаем рост позиций и не
+          переписываем тексты сайта за вас. Мы показываем, что именно мешает, и объясняем, что
+          с этим делать.</p>
+      </div>
+    </section>
     <section id="install">
       <div class="wrap">
-        <h2>Установка</h2>
+        <h2>Для разработчиков</h2>
+        <p class="lead">Этот раздел нужен, только если вы работаете в редакторе кода
+          и хотите запускать проверку оттуда. Для обычной проверки на этой странице
+          ничего устанавливать не надо.</p>
         <p class="lead">Этот раздел нужен, только если вы работаете в редакторе кода и хотите
           запускать проверку оттуда. Для обычной проверки на этой странице ничего
           устанавливать не надо.</p>
@@ -706,13 +712,64 @@ npm install --omit=dev</code></pre>
           <p class="hint">Инструкцию сознательно не дублируем у себя: она обновляется на стороне
             uCoz, и копия рано или поздно разойдётся с оригиналом.</p>
         </div>
-      </div>
-    </section>
 
-    <section id="workflow">
-      <div class="wrap">
-        <h2>Как работает</h2>
+        <details class="dev-block">
+          <summary>Чем эта проверка отличается от официального uCoz MCP</summary>
+                <p class="lead">Их легко перепутать, поэтому по порядку. Две первые находят проблемы,
+          третья их чинит. Каждая работает сама по себе, вместе они нужны только для
+          автоматических правок.</p>
+
         <div class="grid">
+          <article class="card">
+            <h3>1. Проверка на этой странице</h3>
+            <p><b>Нужно от вас: ничего.</b> Ни установки, ни регистрации, ни ключей, ни доступа
+              к панели сайта.</p>
+            <p>Наш сервер сам заходит на ваш сайт снаружи и читает публичные страницы ровно так
+              же, как их видит поисковик. Ничего в сайте не меняется.</p>
+            <p class="hint">Работает с любым сайтом в интернете, не только с uCoz.</p>
+          </article>
+
+          <article class="card">
+            <h3>2. SEO MCP: тот же аудит, но для вашего ИИ</h3>
+            <p><b>Нужно от вас: вставить один адрес</b> в Codex, Cursor или Claude. Скачивать и
+              устанавливать нечего.</p>
+            <p>Проверки те же самые. Разница в том, кто их запускает: не вы руками через форму,
+              а ваш ИИ-помощник. Он сразу разбирает отчёт и продолжает работу дальше.</p>
+            <p class="hint">Это наш отдельный продукт. Для него uCoz MCP не нужен.</p>
+          </article>
+
+          <article class="card">
+            <h3>3. Официальный uCoz MCP: чтобы починить</h3>
+            <p><b>Нужно от вас: подключить его и вписать API-ключ вашего сайта на uCoz.</b></p>
+            <p>Это <b>не наш продукт</b>, а официальный MCP платформы uCoz. Он открывает шаблоны
+              и файлы сайта изнутри. Первые два пункта проблемы только <b>находят</b>, внести
+              правку в шаблон может лишь он.</p>
+            <p class="hint">Нужен, только если хотите автоматические правки. Для проверки не нужен.</p>
+          </article>
+        </div>
+
+        <div class="card notice" style="margin-top:14px">
+          <h3>Почему связка сильнее, чем каждый по отдельности</h3>
+          <p>Проверка снаружи видит <b>страницы</b>, то есть следствие. Шаблон это <b>причина</b>:
+            одна правка в нём убирает проблему сразу на всех страницах, где она повторяется.
+            Поэтому находит наш инструмент, а исправляет официальный uCoz MCP, и оба нужны только
+            для этого сценария.</p>
+        </div>
+
+        <div class="matrix-scroll" tabindex="0" role="group" aria-label="Таблица, прокручивается по горизонтали" style="margin-top:14px"><table class="matrix">
+          <thead><tr><th>Что делаем</th><th>Что для этого нужно</th></tr></thead>
+          <tbody>
+            <tr><td>Проверить сайт и получить отчёт</td><td><b>Ничего.</b> Форма выше</td></tr>
+            <tr><td>Проверять из своего редактора кода</td><td>Один адрес нашего MCP</td></tr>
+            <tr><td>Проверить сайт не на uCoz</td><td>Тоже ничего, работает с любым сайтом</td></tr>
+            <tr><td>Увидеть проблему в самом шаблоне, а не на странице</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
+            <tr><td>Чтобы правки вносились автоматически</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
+          </tbody>
+        </table></div>
+        </details>
+        <details class="dev-block">
+          <summary>Как выглядит полный цикл проверки и правок для агента</summary>
+                <div class="grid">
           <article class="card"><h3>1. Audit</h3><p><code>audit_site</code> сканирует сайт и создает отчет с группировкой по страницам.</p></article>
           <article class="card"><h3>2. Lighthouse</h3><p><code>run_lighthouse_audit</code> снимает performance/SEO-сигналы через Chrome без ручной проверки.</p></article>
           <article class="card"><h3>3. Fix & verify</h3><p>Официальный <code>ucoz-mcp</code> применяет точечный diff, затем аудит запускается повторно.</p></article>
@@ -725,7 +782,7 @@ npm install --omit=dev</code></pre>
           <span class="pill">preview_template_fix</span>
           <span class="pill">compare_audits</span>
         </div>
-        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
+        <div class="matrix-scroll" tabindex="0" role="group" aria-label="Таблица, прокручивается по горизонтали" style="margin-top:14px"><table class="matrix">
           <thead><tr><th>Шаг</th><th>Что делает агент</th><th>Что видит человек</th></tr></thead>
           <tbody>
             <tr><td>1. Audit</td><td>Сканирует публичные страницы и исключает служебные URL админки.</td><td>Сводку Critical/Recommended/Passed и список страниц с проблемами.</td></tr>
@@ -736,13 +793,10 @@ npm install --omit=dev</code></pre>
             <tr><td>6. Re-audit</td><td>Запускает повторную проверку и сравнивает состояние до/после.</td><td>Сколько проблем исправлено и что осталось в очереди.</td></tr>
           </tbody>
         </table></div>
-      </div>
-    </section>
-
-    <section id="safety">
-      <div class="wrap">
-        <h2>Безопасность правок</h2>
-        <div class="matrix-scroll"><table class="matrix">
+        </details>
+        <details class="dev-block">
+          <summary>Что правится автоматически, а что только с подтверждением</summary>
+                <div class="matrix-scroll" tabindex="0" role="group" aria-label="Таблица, прокручивается по горизонтали"><table class="matrix">
           <thead><tr><th>Режим</th><th>Что попадает</th><th>Как действовать</th></tr></thead>
           <tbody>
             <tr><td>Safe auto-fix</td><td>Детерминированные вставки вроде viewport, базовых OG/Twitter meta при надежном источнике данных.</td><td>Можно готовить автоматически, но с diff и повторной проверкой.</td></tr>
@@ -754,6 +808,19 @@ npm install --omit=dev</code></pre>
           <h3>Важно про безопасность</h3>
           <p>Не кладите реальные API-ключи и FTP-пароли в публичные архивы. Этот пакет не содержит секретов: каждый пользователь подключает свой сайт локально в MCP-клиенте.</p>
         </article>
+        </details>
+        <details class="dev-block">
+          <summary>Что внутри инструмента</summary>
+                <div class="grid">
+          <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
+          <article class="card"><h3>Проверка по URL без установки</h3><p>Публичная форма на этой странице: вводите адрес, через несколько секунд видите список проблем. Ничего ставить не нужно, сайт при проверке только читается.</p></article>
+          <article class="card"><h3>Удобные форматы отчёта</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
+          <article class="card"><h3>Lighthouse без DevTools</h3><p>Не нужно открывать инструменты разработчика и гонять тесты вручную: Performance, SEO, Accessibility, Best Practices и метрики загрузки попадают в отчёт одним нажатием.</p></article>
+          <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
+          <article class="card wide"><h3>Интеграция с uCoz</h3><p>Сама проверка сайту ничего не требует: страницы читаются как их видит поисковик. Официальный <code>ucoz-mcp</code> подключается отдельно и нужен только для того, чтобы прочитать шаблоны и файлы по FTP и внести в них правки после вашего подтверждения.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
+          <article class="card"><h3>Проверка после исправлений</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
+        </div>
+        </details>
       </div>
     </section>
   </main>
@@ -789,6 +856,9 @@ npm install --omit=dev</code></pre>
     // корня. Переопределить можно через window.SEO_DEEP_API.
     var DEEP_API = window.SEO_DEEP_API || API.replace(/\/api\/audit$/, '/api/deep');
     var lastUrl = '';
+    // Число обойдённых страниц приходит только в первой части, а счётчики
+    // перерисовываются после второй. Запоминаем, иначе на месте числа окажется ноль.
+    var lastPages = 0;
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
     var button = document.getElementById('check-btn');
@@ -822,14 +892,19 @@ npm install --omit=dev</code></pre>
         })
         .then(render)
         .catch(function (error) {
-          // Сетевая ошибка означает, что сервис проверки просто не поднят по адресу API.
-          // Показываем это прямым текстом, а не общим "что-то пошло не так".
+          // Человеку надо сказать три вещи: что случилось, виноват ли он и что делать.
+          // Раньше здесь стояло «поднять сервис можно командой npm run web из пакета»:
+          // владельцу сайта эта фраза не говорит ничего и выглядит так, будто он сам
+          // что-то сломал.
           var offline = error instanceof TypeError;
-          out.innerHTML = '<div class="check-msg bad">' + escapeHtml(
-            offline
-              ? 'Сервис проверки сейчас недоступен. Поднять его можно командой npm run web из пакета.'
-              : error.message
-          ) + '</div>';
+          var timeout = error && error.name === 'AbortError';
+          var text = offline
+            ? 'Не удалось связаться с сервисом проверки. Скорее всего, это на нашей стороне: проверьте интернет и попробуйте через пару минут.'
+            : (timeout
+              ? 'Проверка идёт дольше обычного и мы прервали ожидание. Сайт мог отвечать очень медленно. Попробуйте ещё раз через минуту.'
+              : error.message);
+          out.innerHTML = '<div class="check-msg bad"><b>Проверка не прошла</b>' +
+            '<div class="why">' + escapeHtml(text) + '</div></div>';
         })
         .finally(function () {
           button.disabled = false;
@@ -839,6 +914,7 @@ npm install --omit=dev</code></pre>
 
     function render(data) {
       lastUrl = data.url || input.value.trim();
+      lastPages = data.pagesScanned || 0;
       var s = data.summary || {};
 
       // Блокер идёт до всего остального и в единственном числе. Если сайт закрыт от
@@ -851,10 +927,16 @@ npm install --omit=dev</code></pre>
 
       var scores =
         '<div class="check-scores">' +
-          score('crit', s.critical || 0, 'критичных') +
-          score('rec', s.recommended || 0, 'рекомендаций') +
-          score('ok', s.passed || 0, 'проверок OK') +
-          score('', data.pagesScanned || 0, 'страниц проверено') +
+          // Цвет по значению, а не по названию строки. Ноль критичных это хорошая
+          // новость, и красным его печатать нельзя: человек читает цвет раньше цифры.
+          score(s.critical ? 'crit' : 'ok', s.critical || 0,
+            plural(s.critical || 0, 'срочная проблема', 'срочные проблемы', 'срочных проблем')) +
+          score(s.recommended ? 'rec' : 'ok', s.recommended || 0,
+            plural(s.recommended || 0, 'улучшение', 'улучшения', 'улучшений')) +
+          score('ok', s.passed || 0,
+            plural(s.passed || 0, 'проверка пройдена', 'проверки пройдено', 'проверок пройдено')) +
+          score('', data.pagesScanned || 0,
+            plural(data.pagesScanned || 0, 'страница проверена', 'страницы проверено', 'страниц проверено')) +
         '</div>';
 
       // Служебные страницы конструктора (политика, соглашение, оформление заказа,
@@ -873,8 +955,8 @@ npm install --omit=dev</code></pre>
       // Когда есть блокер, остальные замечания прячем под раскрытие: чинить их сейчас
       // всё равно рано, а на экране они перебивают главное.
       var issues = data.blocker
-        ? '<div class="check-msg"><a href="javascript:void(0)" id="show-rest">' +
-          'Показать остальные замечания (' + (data.issues || []).length + ')</a>' +
+        ? '<div class="check-msg"><button type="button" class="linkish" id="show-rest" aria-expanded="false">' +
+          'Показать остальные замечания (' + (data.issues || []).length + ')</button>' +
           '<div id="rest-issues" hidden style="margin-top:10px">' + issuesHtml + '</div></div>'
         : issuesHtml;
 
@@ -909,6 +991,7 @@ npm install --omit=dev</code></pre>
           var hidden = box.hasAttribute('hidden');
           if (hidden) { box.removeAttribute('hidden'); } else { box.setAttribute('hidden', ''); }
           el.textContent = hidden ? 'скрыть страницы' : 'показать страницы';
+          el.setAttribute('aria-expanded', hidden ? 'true' : 'false');
         });
       });
 
@@ -926,6 +1009,7 @@ npm install --omit=dev</code></pre>
           showRest.textContent = hidden
             ? 'Скрыть остальные замечания'
             : 'Показать остальные замечания (' + (box.querySelectorAll('li').length) + ')';
+          showRest.setAttribute('aria-expanded', hidden ? 'true' : 'false');
         });
       }
 
@@ -960,7 +1044,10 @@ npm install --omit=dev</code></pre>
         })
         .then(function (data) {
           renderDeep(data);
-          // Файлы отдаём только теперь: в них весь результат, включая Lighthouse.
+          // Счётчики наверху надо пересчитать. Вторая часть добавляет к результату
+          // замечания Lighthouse, и без обновления на экране оставалось число из первой
+          // части: человек видел «1 улучшение», а в скачанном отчёте их было четырнадцать.
+          updateScores(data.summary);
           showDownloads(data, quick);
         })
         .catch(function (error) {
@@ -1037,6 +1124,28 @@ npm install --omit=dev</code></pre>
       var host = document.createElement('div');
       host.innerHTML = html;
       out.appendChild(host);
+    }
+
+    /**
+     * Пересчитывает счётчики наверху результата.
+     *
+     * Перерисовываем только сами числа, а не весь блок: человек в этот момент уже читает
+     * список замечаний, и подменять его целиком означало бы сбросить прокрутку и закрыть
+     * то, что он успел раскрыть.
+     */
+    function updateScores(summary) {
+      if (!summary) return;
+      var box = out.querySelector('.check-scores');
+      if (!box) return;
+      box.innerHTML =
+        score(summary.critical ? 'crit' : 'ok', summary.critical || 0,
+          plural(summary.critical || 0, 'срочная проблема', 'срочные проблемы', 'срочных проблем')) +
+        score(summary.recommended ? 'rec' : 'ok', summary.recommended || 0,
+          plural(summary.recommended || 0, 'улучшение', 'улучшения', 'улучшений')) +
+        score('ok', summary.passed || 0,
+          plural(summary.passed || 0, 'проверка пройдена', 'проверки пройдено', 'проверок пройдено')) +
+        score('', lastPages || 0,
+          plural(lastPages || 0, 'страница проверена', 'страницы проверено', 'страниц проверено'));
     }
 
     /** Русские окончания. Без них выходит «3 проблема» и «5 улучшения». */
@@ -1124,7 +1233,7 @@ npm install --omit=dev</code></pre>
       var id = 'issue-pages-' + index;
       var pages = issue.pages || [];
       var toggle = pages.length
-        ? ' <a href="javascript:void(0)" data-toggle="' + id + '">показать страницы</a>'
+        ? ' <button type="button" class="linkish" data-toggle="' + id + '" aria-expanded="false">показать страницы</button>'
         : '';
       var list = pages.length
         ? '<div id="' + id + '" hidden class="why"><ul style="margin:6px 0 0;padding-left:18px">' +

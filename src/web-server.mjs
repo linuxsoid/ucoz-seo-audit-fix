@@ -41,7 +41,8 @@
  *   PORT             порт (по умолчанию 8787)
  *   HOST             интерфейс (по умолчанию 0.0.0.0)
  *   MAX_PAGES        сколько страниц обходить в публичном режиме (по умолчанию 8, потолок 20)
- *   RATE_LIMIT       сколько аудитов с одного IP за окно (по умолчанию 5)
+ *   RATE_LIMIT       сколько токенов на один IP за окно (по умолчанию 12; полная
+ *                    проверка стоит 4: один за первую часть и три за вторую)
  *   RATE_WINDOW_MS   длина окна лимита в миллисекундах (по умолчанию 600000, то есть 10 минут)
  *   MAX_CONCURRENT   сколько аудитов выполняется одновременно на весь сервис (по умолчанию 2)
  *   TRUST_PROXY      1, если сервис стоит за nginx и настоящий IP приходит в X-Forwarded-For
@@ -71,7 +72,10 @@ const HOST = process.env.HOST ?? '0.0.0.0';
 // Потолок в 20 страниц жёсткий: даже если кто-то выставит MAX_PAGES=500, публичный обход
 // столько не сделает. Полный обход это сценарий владельца через MCP, а не витрины.
 const MAX_PAGES = Math.min(Number(process.env.MAX_PAGES ?? 8), 20);
-const RATE_LIMIT = Number(process.env.RATE_LIMIT ?? 5);
+// Полная проверка стоит 4 токена из этого окна: один за первую часть и три за вторую,
+// которая дороже примерно в двадцать раз. Значение по умолчанию должно вмещать хотя бы
+// три полные проверки, иначе повторная проверка после правок ломается на середине.
+const RATE_LIMIT = Number(process.env.RATE_LIMIT ?? 12);
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 10 * 60 * 1000);
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
@@ -575,9 +579,25 @@ async function handleAudit(req, res) {
       AUDIT_TIMEOUT_MS,
       'Проверка заняла слишком много времени. Сайт отвечает медленно.'
     );
+    const sessionId = rememberAudit(result);
+
+    // Отчёт собираем уже здесь, по одной первой части.
+    //
+    // Так было не всегда, и это было прямой поломкой: файлы появлялись только после
+    // второй части, а если она падала, человек после минуты ожидания получал красную
+    // плашку и ноль файлов. При этом на экране ему было обещано обратное. Теперь отчёт
+    // по первой части существует сразу, а вторая часть его достраивает.
+    rememberArtifacts(sessionId, buildArtifacts(result, {
+      humanMd: toMarkdown(result),
+      humanHtml: toHtml(result),
+      agentMdRu: toAgentMarkdown(result, { lang: 'ru' }),
+      agentMdEn: toAgentMarkdown(result, { lang: 'en' })
+    }, null, null));
+
     return sendJson(res, 200, {
-      sessionId: rememberAudit(result),
-      ...compactResult(result, Date.now() - startedAt)
+      sessionId,
+      ...compactResult(result, Date.now() - startedAt),
+      result: bundleInfo(sessionId)
     });
   } catch (error) {
     return sendJson(res, 502, { error: String(error?.message ?? error) });
