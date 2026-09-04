@@ -144,3 +144,61 @@ test('петля перенаправлений обрывается, а не к
     loop.close();
   }
 });
+
+test('обход добирает адреса из sitemap.xml, когда ссылок на странице мало', async () => {
+  // На сайтах конструкторов меню рисуется скриптом, и в исходнике страницы ссылок почти
+  // нет. Замерено на живом сайте: на главной четыре внутренние ссылки, три из них на
+  // картинки. Проверять было нечего, хотя страниц десятки и все они в его же sitemap.xml.
+  const pages = {
+    '/': '<html><head><title>Главная страница сайта тут</title></head><body>' +
+         '<h1>Главная</h1><a href="/logo.png">Логотип</a></body></html>',
+    '/uslugi': '<html><head><title>Услуги нашей компании</title></head><body><h1>Услуги</h1></body></html>',
+    '/ceny': '<html><head><title>Цены на услуги компании</title></head><body><h1>Цены</h1></body></html>',
+    '/kontakty': '<html><head><title>Контакты нашей компании</title></head><body><h1>Контакты</h1></body></html>'
+  };
+
+  const site = createServer((req, res) => {
+    const path = req.url.split('?')[0];
+    if (path === '/sitemap.xml') {
+      const base = `http://127.0.0.1:${site.address().port}`;
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      res.end('<?xml version="1.0"?><urlset>' +
+        Object.keys(pages).map((p) => `<loc>${base}${p}</loc>`).join('') +
+        `<loc>${base}/logo.png</loc>` +
+        '</urlset>');
+      return;
+    }
+    if (path === '/robots.txt') {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('User-agent: *\nAllow: /\nSitemap: /sitemap.xml');
+      return;
+    }
+    if (path === '/logo.png') {
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      return;
+    }
+    const html = pages[path];
+    if (!html) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(html);
+  });
+  site.listen(0, '127.0.0.1');
+  await once(site, 'listening');
+
+  try {
+    const result = await auditSite(`http://127.0.0.1:${site.address().port}/`, {
+      maxPages: 8,
+      lighthouse: false
+    });
+    const paths = result.pages.map((p) => new URL(p.url).pathname).sort();
+
+    assert.deepEqual(paths, ['/', '/ceny', '/kontakty', '/uslugi'],
+      `обойдены не те страницы: ${paths.join(', ')}`);
+    // Картинка есть и в ссылках, и в карте сайта, но страницей не считается: проверять
+    // по ней нечего, а лимит обхода она съедает наравне со страницей.
+    assert.ok(!paths.includes('/logo.png'), 'картинка попала в обход как страница');
+  } finally {
+    site.close();
+  }
+});

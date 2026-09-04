@@ -16,7 +16,8 @@ export async function auditSite(startUrl, options = {}) {
   const skippedUrls = [];
   const pages = [];
 
-  const siteChecks = [...(await auditSiteFiles(origin, guard)), ...(await auditTls(origin))];
+  const files = await auditSiteFiles(origin, guard);
+  const siteChecks = [...files.checks, ...(await auditTls(origin))];
 
   while (queue.length && pages.length < maxPages) {
     const url = queue.shift();
@@ -46,6 +47,23 @@ export async function auditSite(startUrl, options = {}) {
         if (link.internal && link.page && !seen.has(link.href) && !queue.includes(link.href)) {
           queue.push(link.href);
         }
+      }
+    }
+
+    // Ссылки кончились, а лимит страниц ещё не выбран: добираем адреса из карты сайта.
+    //
+    // На сайтах, собранных конструктором, меню часто рисуется скриптом, и в исходнике
+    // страницы ссылок почти нет. Замерено на живом сайте: на главной четыре внутренние
+    // ссылки, из которых три ведут на картинки. Проверять было практически нечего, хотя
+    // страниц у сайта десятки, и все они перечислены в его же sitemap.xml.
+    //
+    // Карту берём именно как ДОБОРНЫЙ источник, а не основной: обход по ссылкам заодно
+    // показывает, до каких страниц вообще можно дойти с главной, а это само по себе
+    // важная для SEO вещь. Карта такого не показывает.
+    if (!queue.length && pages.length < maxPages) {
+      for (const href of files.sitemapUrls) {
+        if (pages.length + queue.length >= maxPages) break;
+        if (!seen.has(href) && !queue.includes(href)) queue.push(href);
       }
     }
   }
@@ -288,13 +306,48 @@ async function auditSiteFiles(origin, guard) {
   }
 
   const sitemap = await fetchText(`${origin}/sitemap.xml`, guard);
+  const sitemapUrls = [];
   if (!sitemap.ok) {
     checks.push(issue('recommended', 'site.sitemap_missing', origin, 'sitemap.xml отсутствует или недоступен.', 'Сгенерируйте и опубликуйте sitemap.xml.'));
   } else {
     checks.push(pass('site.sitemap_found', origin, 'sitemap.xml доступен.'));
+    sitemapUrls.push(...extractSitemapUrls(sitemap.text, origin));
   }
 
-  return checks;
+  return { checks, sitemapUrls };
+}
+
+/**
+ * Достаёт адреса страниц из sitemap.xml.
+ *
+ * Зачем это обходу. Обход идёт по ссылкам с главной, а на сайтах, собранных
+ * конструктором, меню часто рисуется скриптом, и в исходнике страницы ссылок почти нет.
+ * Замерено на живом сайте: на главной четыре внутренние ссылки, из которых три ведут на
+ * картинки. Проверять было практически нечего, хотя страниц у сайта десятки.
+ *
+ * sitemap.xml для этого и существует: это список страниц, который владелец сам отдаёт
+ * поисковику. Берём его как второй источник адресов, когда ссылок не хватило.
+ *
+ * Разбираем регуляркой, а не разборщиком XML: нужен только текст внутри loc, а тащить
+ * зависимость ради одного тега незачем. Вложенные карты сайта (sitemapindex) не
+ * раскрываем: это второй запрос за файлом, а нам хватает и первой сотни адресов.
+ */
+function extractSitemapUrls(xml, origin) {
+  const out = [];
+  for (const match of String(xml ?? '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+    try {
+      const url = new URL(decodeHtml(match[1]).trim());
+      if (url.origin !== origin) continue;
+      if (isFileLink(url.pathname)) continue;
+      url.hash = '';
+      const href = normalizeUrl(url.href);
+      if (isServiceUrl(href, origin)) continue;
+      if (!out.includes(href)) out.push(href);
+    } catch {
+      // Мусор вместо адреса просто пропускаем: карта сайта бывает и битой.
+    }
+  }
+  return out.slice(0, 100);
 }
 
 async function fetchText(url, guard) {
