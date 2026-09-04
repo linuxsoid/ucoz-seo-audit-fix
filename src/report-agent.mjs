@@ -90,10 +90,17 @@ const EN = {
 /** Русские подписи берём из самой проверки: движок уже пишет их по-русски. */
 function labelFor(check, lang) {
   if (lang !== 'en') return [check.message, check.fix ?? ''];
+
   const known = EN[check.code];
   if (known) return known;
-  // Незнакомый код (например из Lighthouse) отдаём как есть: лучше английский пропуск,
-  // чем потерянная строка.
+
+  // Проверки Lighthouse несут английский оригинал рядом с нашим русским текстом:
+  // список аудитов Lighthouse огромен и меняется от версии к версии, держать его копию
+  // у себя бессмысленно, а сам Lighthouse формулировки уже даёт.
+  if (check.messageEn) return [check.messageEn, check.fixEn ?? ''];
+
+  // Совсем незнакомый код отдаём как есть: лучше одна русская строка в английском
+  // отчёте, чем потерянная находка.
   return [check.message, check.fix ?? ''];
 }
 

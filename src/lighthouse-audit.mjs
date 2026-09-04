@@ -191,6 +191,15 @@ async function runLighthouseInternal(url, options = {}) {
   }
 }
 
+/** Английские названия категорий Lighthouse для отчёта на английском. */
+const CATEGORY_LABELS_EN = {
+  performance: 'Performance',
+  accessibility: 'Accessibility',
+  'best-practices': 'Best Practices',
+  seo: 'SEO',
+  pwa: 'PWA'
+};
+
 export function lighthouseChecksFromResult(lighthouseResult) {
   if (!lighthouseResult?.available) return [];
   const url = lighthouseResult.url;
@@ -199,16 +208,19 @@ export function lighthouseChecksFromResult(lighthouseResult) {
   for (const category of lighthouseResult.summary.categories ?? []) {
     if (category.score === null) continue;
     if (category.score < 50) {
-      checks.push(issue('critical', `lighthouse.${category.id}_low`, url, `${category.title}: ${category.score}/100.`, 'Откройте Lighthouse-отчет и исправьте самые дорогие рекомендации из блока производительности/SEO.'));
+      checks.push(issue('critical', `lighthouse.${category.id}_low`, url, `${category.title}: ${category.score}/100.`, 'Откройте Lighthouse-отчет и исправьте самые дорогие рекомендации из блока производительности/SEO.',
+        { messageEn: `${CATEGORY_LABELS_EN[category.id] ?? category.id}: ${category.score}/100.`, fixEn: 'Open the Lighthouse report and fix the most expensive recommendations first.' }));
     } else if (category.score < 90) {
-      checks.push(issue('recommended', `lighthouse.${category.id}_needs_work`, url, `${category.title}: ${category.score}/100.`, 'Посмотрите рекомендации Lighthouse и внесите точечные правки.'));
+      checks.push(issue('recommended', `lighthouse.${category.id}_needs_work`, url, `${category.title}: ${category.score}/100.`, 'Посмотрите рекомендации Lighthouse и внесите точечные правки.',
+        { messageEn: `${CATEGORY_LABELS_EN[category.id] ?? category.id}: ${category.score}/100.`, fixEn: 'Review the Lighthouse recommendations and apply targeted fixes.' }));
     } else {
       checks.push(pass(`lighthouse.${category.id}_ok`, url, `${category.title}: ${category.score}/100.`));
     }
   }
 
   for (const item of lighthouseResult.summary.topIssues ?? []) {
-    checks.push(issue(item.severity, `lighthouse.${item.id}`, url, item.message, item.fix));
+    checks.push(issue(item.severity, `lighthouse.${item.id}`, url, item.message, item.fix,
+      { messageEn: item.messageEn, fixEn: item.fixEn }));
   }
 
   return checks;
@@ -246,7 +258,11 @@ function summarizeLighthouse(lhr) {
       savingsBytes: audit.details?.overallSavingsBytes ?? 0,
       severity: audit.score < 0.5 ? 'critical' : 'recommended',
       message: formatAuditMessage(audit),
-      fix: AUDIT_FIXES[audit.id] ?? 'Откройте HTML-отчет Lighthouse и примените рекомендацию после проверки влияния на шаблоны.'
+      fix: AUDIT_FIXES[audit.id] ?? 'Откройте HTML-отчет Lighthouse и примените рекомендацию после проверки влияния на шаблоны.',
+      // Оригинальные формулировки Lighthouse. Нужны для отчёта на английском: без них
+      // туда попадал наш русский текст, и «английский» отчёт был наполовину русским.
+      messageEn: [audit.title, audit.displayValue ? `(${audit.displayValue})` : ''].filter(Boolean).join(' '),
+      fixEn: 'Open the Lighthouse HTML report and apply the recommendation after checking how it affects templates.'
     }))
     .sort((a, b) => b.savingsMs - a.savingsMs || b.savingsBytes - a.savingsBytes || a.score - b.score)
     .slice(0, 12);

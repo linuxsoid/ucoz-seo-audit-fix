@@ -159,6 +159,10 @@ export function toHtml(result) {
       <h2>Пропущенные служебные ссылки</h2>
       ${toHtmlSkippedUrls(result.skippedUrls ?? [])}
     </section>
+    <section class="section">
+      <h2>Политика безопасных исправлений</h2>
+      <p>Автоматически исправляются только детерминированные изменения шаблонов и мета-тегов, с бекапом и diff. Переписывание контента, выбор типа Schema.org, редиректы и canonical требуют подтверждения человека.</p>
+    </section>
   </main>
 </body>
 </html>`;
