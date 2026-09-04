@@ -789,12 +789,6 @@ npm install --omit=dev</code></pre>
     // корня. Переопределить можно через window.SEO_DEEP_API.
     var DEEP_API = window.SEO_DEEP_API || API.replace(/\/api\/audit$/, '/api/deep');
     var lastUrl = '';
-    // Готовые файлы отчёта и данные для имени файла. Заполняются в самом конце
-    // проверки, когда отработали обе части.
-    var lastReports = null;
-    var lastMeta = {};
-    var lastJson = null;
-
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
     var button = document.getElementById('check-btn');
@@ -902,12 +896,6 @@ npm install --omit=dev</code></pre>
         'Cursor или Claude, добавьте свой uCoz-сайт по токену, и после подтверждения система ' +
         'применит подготовленные изменения и покажет diff до записи. ' +
         '<a href="#install">Как подключить</a></div>';
-
-      var jsonCopy = {};
-      Object.keys(data).forEach(function (k) {
-        if (k !== 'reports' && k !== 'sessionId') { jsonCopy[k] = data[k]; }
-      });
-      lastJson = jsonCopy;
 
       out.innerHTML = blocker + scores + skipped + issues + download + deep + cta;
 
