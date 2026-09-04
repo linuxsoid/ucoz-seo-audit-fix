@@ -221,8 +221,11 @@ export function lighthouseChecksFromResult(lighthouseResult) {
 
   for (const category of lighthouseResult.summary.categories ?? []) {
     if (category.score === null) continue;
-    if (category.score < 50) {
-      checks.push(issue('critical', `lighthouse.${category.id}_low`, url, `${category.title}: ${category.score}/100.`, 'Откройте Lighthouse-отчет и исправьте самые дорогие рекомендации из блока производительности/SEO.',
+    // Низкая оценка категории это повод заняться сайтом, но не блокер индексации.
+    // Исключение SEO: там низкая оценка означает, что поисковик и правда плохо понимает
+    // страницу, а это ровно то, чем занят весь остальной отчёт.
+    if (category.score < 50 && category.id === 'seo') {
+      checks.push(issue('critical', `lighthouse.${category.id}_low`, url, `${category.title}: ${category.score}/100.`, 'Такая оценка значит, что поисковик плохо понимает страницу. Откройте отчёт Lighthouse и начните с блока SEO.',
         { messageEn: `${CATEGORY_LABELS_EN[category.id] ?? category.id}: ${category.score}/100.`, fixEn: 'Open the Lighthouse report and fix the most expensive recommendations first.' }));
     } else if (category.score < 90) {
       checks.push(issue('recommended', `lighthouse.${category.id}_needs_work`, url, `${category.title}: ${category.score}/100.`, 'Посмотрите рекомендации Lighthouse и внесите точечные правки.',
@@ -239,6 +242,27 @@ export function lighthouseChecksFromResult(lighthouseResult) {
 
   return checks;
 }
+
+/**
+ * Проверки Lighthouse, которые действительно мешают попасть в индекс.
+ *
+ * Раньше важность брали прямо из оценки Lighthouse: меньше 0.5 значит «критично». Но
+ * Lighthouse ставит ноль почти всему, что не идеально, поэтому в критичные приезжали
+ * лишний CSS, отсутствующие source maps и устаревшие API браузера. На живых сайтах это
+ * давало по двенадцать-тринадцать «критичных» пунктов на каждом, включая сайты, где наши
+ * собственные проверки не нашли ни одной проблемы. Отчёт, который пугает, никто не чинит.
+ *
+ * Здесь только то, чего нет среди наших проверок и что при этом реально закрывает дорогу
+ * поисковику. Отсутствие title, description, viewport, запрет в robots и мёртвый статус
+ * страницы сюда не входят намеренно: их находит наш собственный движок, и дублировать их
+ * значило бы считать одну проблему дважды.
+ */
+const BLOCKING_AUDITS = new Set([
+  // Ссылки сделаны обработчиком, а не href: робот по ним не пройдёт.
+  'crawlable-anchors',
+  // Языковые версии размечены неверно: страницы конкурируют друг с другом в выдаче.
+  'hreflang'
+]);
 
 function summarizeLighthouse(lhr) {
   const categories = Object.entries(lhr.categories ?? {}).map(([id, category]) => ({
@@ -270,7 +294,7 @@ function summarizeLighthouse(lhr) {
       displayValue: formatDisplayValue(audit.displayValue ?? ''),
       savingsMs: audit.details?.overallSavingsMs ?? 0,
       savingsBytes: audit.details?.overallSavingsBytes ?? 0,
-      severity: audit.score < 0.5 ? 'critical' : 'recommended',
+      severity: BLOCKING_AUDITS.has(audit.id) ? 'critical' : 'recommended',
       message: formatAuditMessage(audit),
       fix: AUDIT_FIXES[audit.id] ?? 'Откройте HTML-отчет Lighthouse и примените рекомендацию после проверки влияния на шаблоны.',
       // Оригинальные формулировки Lighthouse. Нужны для отчёта на английском: без них
