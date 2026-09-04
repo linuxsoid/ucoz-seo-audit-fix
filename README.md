@@ -11,7 +11,7 @@ Codex:
 ```toml
 [mcp_servers.ucoz-seo-audit-fix]
 command = "npx"
-args = ["-y", "--package", "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz", "ucoz-seo-audit-mcp"]
+args = ["-y", "--package", "github:linuxsoid/ucoz-seo-audit-fix", "ucoz-seo-audit-mcp"]
 startup_timeout_sec = 60
 ```
 
@@ -25,7 +25,7 @@ Cursor / Claude Desktop:
       "args": [
         "-y",
         "--package",
-        "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz",
+        "github:linuxsoid/ucoz-seo-audit-fix",
         "ucoz-seo-audit-mcp"
       ]
     }
@@ -44,7 +44,8 @@ Cursor / Claude Desktop:
 - `compare_audits` - сравнивает состояние до/после повторной проверки;
 - `ucoz_mcp_demo_workflow` - возвращает сценарий демо с официальным [`ucoz-mcp`](https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz).
 
-ZIP-архив с исходниками доступен отдельно: `https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.zip`.
+Исходники берутся из репозитория, отдельные архивы больше не публикуются: копия на сайте
+не обновляется вместе с кодом и быстро начинает отдавать устаревшую версию.
 
 Запуск аудита через MCP stdio-клиент:
 
