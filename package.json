@@ -20,7 +20,8 @@
     "mcp": "node ./src/mcp-server.mjs",
     "smoke": "node ./src/cli.mjs audit https://api.ucoz.net/ --max-pages 3 --format markdown",
     "smoke:mcp": "node ./scripts/mcp-smoke.mjs",
-    "audit:mcp": "node ./scripts/mcp-audit-site.mjs"
+    "audit:mcp": "node ./scripts/mcp-audit-site.mjs",
+    "web": "node ./src/web-server.mjs"
   },
   "engines": {
     "node": ">=20"
