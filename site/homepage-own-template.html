@@ -160,13 +160,21 @@
     pre {
       margin: 12px 0 0;
       padding: 14px;
-      overflow: auto;
       background: #111827;
       color: #edf2fb;
       border-radius: 8px;
       font-size: 13px;
+      /* Команды и конфиги переносим по строкам, а не прячем в горизонтальную прокрутку.
+         В узкой карточке полоса прокрутки съедала половину команды: человек видел огрызок
+         и не догадывался, что строка длиннее. Перенос здесь только визуальный, при
+         копировании текст остаётся ровно таким, каким написан. */
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
     code { font-family: ui-monospace, Consolas, monospace; }
+    /* Адрес сервера внутри обычного текста тоже длинный и без пробелов: без разрешения
+       переносить его по любому символу он упирался в край карточки и обрезался. */
+    .card code, .card a, .step code, .step a { overflow-wrap: anywhere; }
     .notice { background: var(--green); border-color: #c7eadb; }
     footer { padding: 30px 0 42px; color: var(--muted); }
     @media (max-width: 840px) {
@@ -175,7 +183,6 @@
       .grid { grid-template-columns: 1fr; }
       .wide { grid-column: auto; }
       .feature-list li { grid-template-columns: 1fr; gap: 3px; }
-      .matrix { display: block; overflow-x: auto; }
       .score { grid-template-columns: 1fr; }
     }
       /* Блок публичной проверки по URL */
@@ -226,9 +233,15 @@
        843 px внутри колонки в 331 px. */
     .step > *, .card > * { min-width: 0; }
     pre { max-width: 100%; overflow-x: auto; }
-    /* Таблицы прокручиваются сами на любой ширине, а не только на узких экранах:
-       колонки с длинными путями и именами тулов вылезали и на планшете. */
-    .matrix { display: block; overflow-x: auto; max-width: 100%; }
+    /* Прокрутку таблиц отдаём обёртке, а не самой таблице.
+       Раньше таблице ставили display:block, чтобы она могла прокручиваться. Но блок
+       сжимается по содержимому: таблица переставала занимать всю ширину панели, и справа
+       оставалась пустая треть, как будто у неё есть третья пустая колонка.
+       Теперь таблица остаётся таблицей и тянется на всю ширину, а прокручивается обёртка,
+       и только когда колонки действительно не помещаются. */
+    .matrix-scroll { max-width: 100%; overflow-x: auto; }
+    /* Ниже этой ширины колонки превращаются в кашу из одиночных слов, лучше прокрутка. */
+    .matrix { min-width: 520px; }
     /* Адреса страниц и ресурсов в результатах бывают очень длинными и без пробелов,
        переносить их можно только по любому символу. */
     /* Адреса в результатах бывают очень длинными и без пробелов: строка запроса к
@@ -370,7 +383,7 @@
             для этого сценария.</p>
         </div>
 
-        <table class="matrix" style="margin-top:14px">
+        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
           <thead><tr><th>Что делаем</th><th>Что для этого нужно</th></tr></thead>
           <tbody>
             <tr><td>Проверить сайт и получить отчёт</td><td><b>Ничего.</b> Форма выше</td></tr>
@@ -379,7 +392,7 @@
             <tr><td>Увидеть проблему в самом шаблоне, а не на странице</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
             <tr><td>Чтобы правки вносились автоматически</td><td>Наш MCP плюс официальный uCoz MCP с ключом сайта</td></tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </section>
 
@@ -401,7 +414,7 @@
     <section id="idea">
       <div class="wrap">
         <h2>Возможности сервиса</h2>
-        <table class="matrix">
+        <div class="matrix-scroll"><table class="matrix">
           <thead><tr><th>Требование</th><th>Статус в MVP</th><th>Как реализовано</th></tr></thead>
           <tbody>
             <tr><td>Чтение сайта</td><td>Работает без ключей</td><td>Публичные страницы читаются обычными запросами, как их видит поисковик. Ни ключа, ни доступа к панели для этого не нужно. Чтение самих шаблонов и файлов по FTP это уже <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">официальный uCoz MCP</a>, он подключается отдельно.</td></tr>
@@ -412,7 +425,7 @@
             <tr><td>Backup / diff / approve</td><td>Заложено в workflow</td><td>Safe-fix план не пишет на сайт сам. Перед изменениями используется backup в <code>ucoz-mcp</code>, просмотр diff и подтверждение человека.</td></tr>
             <tr><td>Публичный отчет</td><td>Работает</td><td>Генерируются JSON, Markdown и HTML. HTML можно показать клиенту как понятный результат аудита.</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <div class="grid status" style="margin-top:14px">
           <article class="card"><h3>Что доступно сейчас</h3><p>Проверка сайта по адресу без установки. Мета-теги, заголовки, разметка, индексируемость, сертификат, перелинковка, контакты и счётчик. Глубокая проверка открывает страницу в настоящем браузере и добавляет Lighthouse, Core Web Vitals, логи консоли и сетевые запросы. Через MCP тот же аудит работает из вашего редактора кода, вместе с подготовкой безопасных правок и повторной проверкой.</p></article>
           <article class="card"><h3>В планах</h3><p>Отчёт в PDF, автоматическая генерация Schema.org, проверка орфографии в текстах и массовый прогон по списку сайтов сразу.</p></article>
@@ -440,7 +453,7 @@
           <article class="card"><h3>Где внести изменение</h3><p>Для типовых адресов uCoz отчёт подсказывает, в каком модуле и шаблоне искать: страница товара, каталог, регистрация, редактор страниц. Это подсказка по виду адреса, а не чтение вашего шаблона: чтобы открыть сам шаблон, нужен официальный uCoz MCP.</p></article>
           <article class="card"><h3>Lighthouse</h3><p>Отдельный блок показывает оценки, Core Web Vitals/lab metrics и главные рекомендации без ручного запуска тестов.</p></article>
         </div>
-        <table class="matrix" style="margin-top:14px">
+        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
           <thead><tr><th>Блок отчета</th><th>Зачем нужен</th><th>Пример</th></tr></thead>
           <tbody>
             <tr><td>Публичные страницы</td><td>Все проблемы одной страницы в одном месте.</td><td><code>/shop/2/desc/product</code> и список замечаний к ней.</td></tr>
@@ -448,7 +461,7 @@
             <tr><td>Lighthouse / производительность</td><td>Performance, SEO, Accessibility, Best Practices и основные метрики.</td><td>LCP, FCP, CLS, TBT, Speed Index, вес страницы.</td></tr>
             <tr><td>Пропущенные служебные ссылки</td><td>Показывает, что админские URL были найдены, но исключены из публичного SEO-аудита.</td><td><code>/index/31-...</code> не считается страницей сайта.</td></tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </section>
 
@@ -566,7 +579,7 @@ npm install --omit=dev</code></pre>
           <span class="pill">preview_template_fix</span>
           <span class="pill">compare_audits</span>
         </div>
-        <table class="matrix" style="margin-top:14px">
+        <div class="matrix-scroll" style="margin-top:14px"><table class="matrix">
           <thead><tr><th>Шаг</th><th>Что делает агент</th><th>Что видит человек</th></tr></thead>
           <tbody>
             <tr><td>1. Audit</td><td>Сканирует публичные страницы и исключает служебные URL админки.</td><td>Сводку Critical/Recommended/Passed и список страниц с проблемами.</td></tr>
@@ -576,21 +589,21 @@ npm install --omit=dev</code></pre>
             <tr><td>5. Approve</td><td>Ждет явное подтверждение перед записью.</td><td>Контроль над изменениями, особенно если правка затрагивает шаблон.</td></tr>
             <tr><td>6. Re-audit</td><td>Запускает повторную проверку и сравнивает состояние до/после.</td><td>Сколько проблем исправлено и что осталось в очереди.</td></tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </section>
 
     <section id="safety">
       <div class="wrap">
         <h2>Безопасность правок</h2>
-        <table class="matrix">
+        <div class="matrix-scroll"><table class="matrix">
           <thead><tr><th>Режим</th><th>Что попадает</th><th>Как действовать</th></tr></thead>
           <tbody>
             <tr><td>Safe auto-fix</td><td>Детерминированные вставки вроде viewport, базовых OG/Twitter meta при надежном источнике данных.</td><td>Можно готовить автоматически, но с diff и повторной проверкой.</td></tr>
             <tr><td>Approve required</td><td>Canonical, редиректы, Schema.org, исправление ссылок и изменения шаблонов с влиянием на несколько страниц.</td><td>Сначала backup и preview, затем явное подтверждение человека.</td></tr>
             <tr><td>Manual only</td><td>Переписывание контента, коммерческие обещания, субъективные рекомендации по смыслу текста.</td><td>Отчет объясняет проблему, но не меняет сайт сам.</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <article class="card notice" style="margin-top:14px">
           <h3>Важно про безопасность</h3>
           <p>Не кладите реальные API-ключи и FTP-пароли в публичные архивы. Этот пакет не содержит секретов: каждый пользователь подключает свой сайт локально в MCP-клиенте.</p>
