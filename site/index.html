@@ -282,6 +282,9 @@
       .hero-facts { flex-direction: column; gap: 7px; }
       /* В столбик шапка выше, поэтому и отступ при прокрутке больше. */
       .check-out { scroll-margin-top: 190px; }
+      /* Палец крупнее курсора: даём ссылкам внутри текста запас по высоте. */
+      footer a, .dev-block a, .hint a, .lead a { display: inline-block; padding: 5px 0; }
+      .dev-block > summary { padding: 6px 0; }
     }
   
     /* Поле ввода это главное действие страницы, и выглядеть оно должно соответственно:
@@ -368,8 +371,8 @@
     .code-box { position: relative; }
     /* Цвета кнопки зашиты сознательно: она лежит на блоке кода, а он тёмный в обеих
        темах. С переменными кнопка стала бы светлой на светлом в светлой теме. */
-    .code-copy { position: absolute; top: 8px; right: 8px; padding: 5px 11px; font: inherit;
-      font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 7px;
+    .code-copy { position: absolute; top: 8px; right: 8px; padding: 7px 12px; font: inherit;
+      font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 7px;
       border: 1px solid #3b4657; background: #1f2937; color: #dbe6f7; }
     .code-copy:hover { background: #2b3646; }
     .code-copy:focus-visible { outline: 2px solid #7aa7ff; outline-offset: 2px; }
