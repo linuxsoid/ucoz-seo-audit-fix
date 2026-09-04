@@ -159,10 +159,12 @@ async function runLighthouseInternal(url, options = {}) {
     // Официальный отчёт Lighthouse в исходном виде. Именно его человек открывает руками,
     // и держать его только файлом на нашем диске бессмысленно: в удалённом режиме
     // пользователь до этого диска не доберётся.
-    const rawReports = Array.isArray(result.report)
-      ? { html: result.report.find((r) => String(r).startsWith('<!--')) ?? result.report[0], json: result.report.find((r) => String(r).startsWith('{')) }
-      : { html: typeof result.report === 'string' && result.report.startsWith('<') ? result.report : null,
-          json: typeof result.report === 'string' && result.report.startsWith('{') ? result.report : null };
+    //
+    // Разбираем по позиции, а не по виду содержимого. Lighthouse отдаёт отчёты в том же
+    // порядке, в каком их запросили в output, и это его гарантия. Угадывать формат по
+    // первым символам нельзя: HTML-отчёт начинается не с комментария, а с doctype, и
+    // прошлая попытка «определить на глаз» тихо не находила ни одного из двух файлов.
+    const rawReports = pickRawReports(result.report, output);
     const summary = summarizeLighthouse(result.lhr);
 
     return {
@@ -327,6 +329,25 @@ function normalizeCategories(value) {
   if (!value) return ['performance', 'accessibility', 'best-practices', 'seo'];
   const categories = Array.isArray(value) ? value : String(value).split(',');
   return categories.map((item) => String(item).trim()).filter(Boolean);
+}
+
+/**
+ * Раскладывает отчёты Lighthouse по форматам.
+ *
+ * Lighthouse отдаёт строку, если формат запрошен один, и массив в порядке output, если
+ * форматов несколько. Опираемся именно на этот порядок: он документирован, в отличие от
+ * попытки распознать формат по началу строки.
+ */
+function pickRawReports(report, outputs) {
+  const list = Array.isArray(report) ? report : [report];
+  const out = { html: null, json: null };
+  outputs.forEach((format, index) => {
+    const value = list[index];
+    if (typeof value !== 'string' || !value) return;
+    if (format === 'html') out.html = value;
+    if (format === 'json') out.json = value;
+  });
+  return out;
 }
 
 function normalizeOutput(value) {

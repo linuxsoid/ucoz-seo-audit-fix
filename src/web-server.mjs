@@ -176,7 +176,9 @@ function buildArtifacts(result, reports, lighthouse, browser) {
     add(`lighthouse-${base}.json`, lighthouse.rawJson, 'application/json', 'Lighthouse, JSON');
   }
 
-  return files;
+  // Имя архива отдаём вместе с файлами. Восстанавливать его потом разбором чужого имени
+  // это лишний способ ошибиться, что уже и случилось: регулярка прихватывала кусок слова.
+  return { files, bundleName: `seo-audit-${base}.zip` };
 }
 
 function hostOfUrl(url) {
@@ -184,9 +186,9 @@ function hostOfUrl(url) {
 }
 
 /** Артефакты живут в той же сессии и умирают вместе с ней. */
-function rememberArtifacts(id, files) {
+function rememberArtifacts(id, bundle) {
   const entry = sessions.get(String(id ?? ''));
-  if (entry) entry.files = files;
+  if (entry) entry.artifacts = bundle;
 }
 
 function recallArtifacts(id) {
@@ -196,13 +198,13 @@ function recallArtifacts(id) {
     sessions.delete(id);
     return null;
   }
-  return entry.files ?? null;
+  return entry.artifacts ?? null;
 }
 
 function sendArtifact(res, id, name) {
-  const files = recallArtifacts(id);
-  if (!files) return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
-  const file = files.find((f) => f.name === name);
+  const bundle = recallArtifacts(id);
+  if (!bundle) return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
+  const file = bundle.files.find((f) => f.name === name);
   if (!file) return sendJson(res, 404, { error: 'Такого файла в этой проверке нет.' });
 
   const body = Buffer.isBuffer(file.data) ? file.data : Buffer.from(String(file.data), 'utf8');
@@ -218,12 +220,12 @@ function sendArtifact(res, id, name) {
 }
 
 function sendBundle(res, id) {
-  const files = recallArtifacts(id);
-  if (!files || !files.length) {
+  const bundle = recallArtifacts(id);
+  if (!bundle?.files?.length) {
     return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
   }
-  const zip = createZip(files.map((f) => ({ name: f.name, data: f.data })));
-  const name = `seo-audit-${(files[0].name.match(/-([a-z0-9.-]+-\d{4}-\d{2}-\d{2})\./) || [])[1] || 'bundle'}.zip`;
+  const zip = createZip(bundle.files.map((f) => ({ name: f.name, data: f.data })));
+  const name = bundle.bundleName;
   res.writeHead(200, {
     'content-type': 'application/zip',
     'content-length': zip.length,
@@ -438,7 +440,7 @@ async function handleDeepAudit(req, res) {
       summary: base?.summary ?? null,
       reports,
       // Только описание файлов, без содержимого: сами файлы качаются по ссылке.
-      files: base ? (recallArtifacts(body?.sessionId) ?? []).map((f) => ({ name: f.name, title: f.title, size: Buffer.byteLength(Buffer.isBuffer(f.data) ? f.data : String(f.data)) })) : [],
+      files: base ? (recallArtifacts(body?.sessionId)?.files ?? []).map((f) => ({ name: f.name, title: f.title, size: Buffer.byteLength(Buffer.isBuffer(f.data) ? f.data : String(f.data)) })) : [],
       sessionId: body?.sessionId ?? null,
       lighthouse: lighthouse?.available ? {
         categories: lighthouse.summary?.categories ?? [],
@@ -449,7 +451,6 @@ async function handleDeepAudit(req, res) {
         summary: browser.summary,
         loadComplete: browser.loadComplete,
         loadNote: browser.loadNote,
-        har: browser.har,
         consoleErrors: browser.consoleErrors.slice(0, 10),
         jsErrors: browser.jsErrors.slice(0, 10),
         failedRequests: browser.failedRequests.slice(0, 10),

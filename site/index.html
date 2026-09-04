@@ -624,9 +624,6 @@ npm install --omit=dev</code></pre>
     var lastReports = null;
     var lastMeta = {};
     var lastJson = null;
-    // HAR приходит из браузерной части: это запись всех сетевых запросов в
-    // стандартном формате, который открывают DevTools и любой анализатор.
-    var lastHar = null;
 
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
@@ -808,7 +805,6 @@ npm install --omit=dev</code></pre>
           });
         })
         .then(function (data) {
-          lastHar = (data.browser && data.browser.har) || null;
           renderDeep(data);
           // Файлы отдаём только теперь: в них весь результат, включая Lighthouse.
           showDownloads(data, quick);
