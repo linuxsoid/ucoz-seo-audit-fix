@@ -54,6 +54,7 @@ import { browserSlotStats } from './browser-slot.mjs';
 import { runLighthouseAudit } from './lighthouse-audit.mjs';
 import { collectBrowserDiagnostics } from './browser-probe.mjs';
 import { toMarkdown, toHtml } from './report.mjs';
+import { lighthouseChecksFromResult } from './lighthouse-audit.mjs';
 import { toAgentMarkdown } from './report-agent.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -121,6 +122,47 @@ const server = createServer(async (req, res) => {
 });
 
 /**
+ * Короткая память о результатах проверки.
+ *
+ * Нужна ровно для одного: глубокая часть должна достроить уже посчитанный результат, а не
+ * обходить сайт заново. Обход это секунды и трафик чужого сайта, делать его дважды ради
+ * пересборки того же отчёта неприлично.
+ *
+ * Живёт в памяти процесса, чистится по времени и по количеству. Ничего ценного здесь нет:
+ * это публично доступные данные о публичном сайте, и через четверть часа они протухают.
+ */
+const SESSION_TTL_MS = 15 * 60 * 1000;
+const SESSION_MAX = 50;
+const sessions = new Map();
+
+function rememberAudit(result) {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  sessions.set(id, { result, at: Date.now() });
+  pruneSessions();
+  return id;
+}
+
+function recallAudit(id) {
+  const entry = sessions.get(String(id ?? ''));
+  if (!entry) return null;
+  if (Date.now() - entry.at > SESSION_TTL_MS) {
+    sessions.delete(id);
+    return null;
+  }
+  return entry.result;
+}
+
+function pruneSessions() {
+  const now = Date.now();
+  for (const [id, entry] of sessions) {
+    if (now - entry.at > SESSION_TTL_MS) sessions.delete(id);
+  }
+  while (sessions.size > SESSION_MAX) {
+    sessions.delete(sessions.keys().next().value);
+  }
+}
+
+/**
  * Определяет, какой маршрут запрошен, независимо от того, куда хостинг подвесил приложение.
  *
  * Зачем так, а не сравнение путей напрямую. Хостинг серверных скриптов uCoz монтирует
@@ -185,7 +227,10 @@ async function handleAudit(req, res) {
       AUDIT_TIMEOUT_MS,
       'Проверка заняла слишком много времени. Сайт отвечает медленно.'
     );
-    return sendJson(res, 200, compactResult(result, Date.now() - startedAt));
+    return sendJson(res, 200, {
+      sessionId: rememberAudit(result),
+      ...compactResult(result, Date.now() - startedAt)
+    });
   } catch (error) {
     return sendJson(res, 502, { error: String(error?.message ?? error) });
   } finally {
@@ -244,9 +289,33 @@ async function handleDeepAudit(req, res) {
     });
     const browser = await collectBrowserDiagnostics(target, { formFactor, waitMs: 4000 });
 
+    // Достраиваем результат быстрой части данными Lighthouse и пересобираем отчёт,
+    // чтобы скачанный файл содержал ВСЁ, а не половину.
+    let reports = null;
+    const base = recallAudit(body?.sessionId);
+    if (base && lighthouse?.available) {
+      base.lighthouse = lighthouse;
+      const extra = lighthouseChecksFromResult(lighthouse);
+      // Второй прогон не должен задваивать замечания Lighthouse в отчёте.
+      base.checks = [...base.checks.filter((check) => !String(check.code).startsWith('lighthouse.')), ...extra];
+      base.summary = {
+        critical: base.checks.filter((c) => c.severity === 'critical').length,
+        recommended: base.checks.filter((c) => c.severity === 'recommended').length,
+        passed: base.checks.filter((c) => c.severity === 'pass').length
+      };
+      reports = {
+        humanMd: toMarkdown(base),
+        humanHtml: toHtml(base),
+        agentMdRu: toAgentMarkdown(base, { lang: 'ru' }),
+        agentMdEn: toAgentMarkdown(base, { lang: 'en' })
+      };
+    }
+
     return sendJson(res, 200, {
       url: target,
       formFactor,
+      summary: base?.summary ?? null,
+      reports,
       lighthouse: lighthouse?.available ? {
         categories: lighthouse.summary?.categories ?? [],
         metrics: lighthouse.summary?.metrics ?? [],

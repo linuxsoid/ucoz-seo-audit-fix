@@ -610,6 +610,11 @@ npm install --omit=dev</code></pre>
     // корня. Переопределить можно через window.SEO_DEEP_API.
     var DEEP_API = window.SEO_DEEP_API || API.replace(/\/api\/audit$/, '/api/deep');
     var lastUrl = '';
+    // Готовые файлы отчёта и данные для имени файла. Заполняются в самом конце
+    // проверки, когда отработали обе части.
+    var lastReports = null;
+    var lastMeta = {};
+    var lastJson = null;
 
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
@@ -700,9 +705,10 @@ npm install --omit=dev</code></pre>
           '<div id="rest-issues" hidden style="margin-top:10px">' + issuesHtml + '</div></div>'
         : issuesHtml;
 
-      // Выгрузка отчёта. Сервер отдал готовые файлы вместе с результатом, поэтому
-      // скачивание мгновенное и не тратит лимит на повторную проверку.
-      var files = data.reports || {};
+      // Блок скачивания на этом шаге НЕ показываем. Проверка ещё не закончена: впереди
+      // браузерная часть, и файлы, собранные сейчас, не содержали бы Lighthouse. Раньше
+      // так и было, и скачанный отчёт молча терял половину данных.
+      var files = {};
       var download = Object.keys(files).length
         ? '<div class="check-msg" style="margin-top:14px"><b>Скачать отчёт</b>' +
           '<p class="check-note" style="margin:6px 0 10px">HTML открывается двойным щелчком, ' +
@@ -719,12 +725,11 @@ npm install --omit=dev</code></pre>
         : '';
 
       var deep =
-        '<div class="check-msg" style="margin-top:14px">' +
-        '<b>Глубокая проверка.</b> Откроем в настоящем браузере ту страницу, адрес которой вы ввели: ' +
-        'оценки Lighthouse, Core Web Vitals, ошибки консоли и упавшие запросы. ' +
-        'Занимает около минуты.<br>' +
-        '<button type="button" class="btn primary" id="check-deep" style="margin-top:10px">' +
-        'Запустить глубокую проверку</button>' +
+        '<div class="check-msg" style="margin-top:14px" id="check-deep-box">' +
+        '<b><span class="spin"></span>Шаг 2 из 2: открываем страницу в настоящем браузере.</b>' +
+        '<p class="check-note" style="margin:6px 0 0">Снимаем оценки Lighthouse, Core Web Vitals, ' +
+        'ошибки консоли и упавшие запросы. Это занимает около минуты. Отчёт для скачивания ' +
+        'появится, когда закончится и эта часть.</p>' +
         '<div id="check-deep-out"></div></div>';
 
       var cta =
@@ -733,6 +738,12 @@ npm install --omit=dev</code></pre>
         'Cursor или Claude, добавьте свой uCoz-сайт по токену, и после подтверждения система ' +
         'применит подготовленные изменения и покажет diff до записи. ' +
         '<a href="#install">Как подключить</a></div>';
+
+      var jsonCopy = {};
+      Object.keys(data).forEach(function (k) {
+        if (k !== 'reports' && k !== 'sessionId') { jsonCopy[k] = data[k]; }
+      });
+      lastJson = jsonCopy;
 
       out.innerHTML = blocker + scores + skipped + issues + download + deep + cta;
 
@@ -753,8 +764,10 @@ npm install --omit=dev</code></pre>
         el.addEventListener('click', function () { saveReport(el.getAttribute('data-dl'), data); });
       });
 
-      var deepBtn = document.getElementById('check-deep');
-      if (deepBtn) { deepBtn.addEventListener('click', runDeep); }
+      // Браузерную часть запускаем сами, сразу за быстрой. Для человека это одна проверка,
+      // а два этапа нужны только чтобы он увидел первые результаты через несколько секунд,
+      // а не смотрел в пустой экран целую минуту.
+      runDeep(data);
 
       var showRest = document.getElementById('show-rest');
       if (showRest) {
@@ -781,18 +794,15 @@ npm install --omit=dev</code></pre>
       }
     }
 
-    function runDeep() {
-      var btn = document.getElementById('check-deep');
+    function runDeep(quick) {
       var box = document.getElementById('check-deep-out');
-      btn.disabled = true;
-      btn.textContent = 'Проверяю в браузере';
-      box.innerHTML = '<div class="check-note" style="margin-top:10px">Запускаем браузер. ' +
-        'Если сейчас идут другие проверки, запрос подождёт своей очереди.</div>';
 
       fetch(DEEP_API, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: lastUrl })
+        // sessionId позволяет серверу достроить уже посчитанный результат, а не обходить
+        // сайт второй раз ради того же самого.
+        body: JSON.stringify({ url: lastUrl, sessionId: quick && quick.sessionId })
       })
         .then(function (response) {
           return response.json().then(function (data) {
@@ -800,17 +810,56 @@ npm install --omit=dev</code></pre>
             return data;
           });
         })
-        .then(renderDeep)
+        .then(function (data) {
+          renderDeep(data);
+          // Файлы отдаём только теперь: в них весь результат, включая Lighthouse.
+          showDownloads(data.reports, quick);
+        })
         .catch(function (error) {
           box.innerHTML = '<div class="check-msg bad" style="margin-top:10px">' +
             escapeHtml(error instanceof TypeError
-              ? 'Сервис глубокой проверки сейчас недоступен.'
+              ? 'Браузерная часть проверки сейчас недоступна.'
               : error.message) + '</div>';
+          // Даже если браузерная часть не удалась, отчёт по первой части отдать нужно.
+          showDownloads(quick.reports, quick, true);
         })
         .finally(function () {
-          btn.disabled = false;
-          btn.textContent = 'Запустить ещё раз';
+          var head = document.querySelector('#check-deep-box b');
+          if (head) { head.innerHTML = 'Шаг 2 из 2: браузерная проверка завершена.'; }
         });
+    }
+
+    /**
+     * Показывает блок скачивания. Вызывается один раз, в самом конце проверки, поэтому
+     * человеку не приходится гадать, какие файлы к какому этапу относятся.
+     */
+    function showDownloads(reports, quick, partial) {
+      if (!reports || !Object.keys(reports).length) return;
+      lastReports = reports;
+      lastMeta = { url: quick.url, scannedAt: quick.scannedAt };
+
+      var note = partial
+        ? 'Браузерная часть не отработала, поэтому в отчёте только результаты первой части.'
+        : 'В отчёте всё: и проверка страниц, и Lighthouse с браузерной диагностикой.';
+
+      var html = '<div class="check-msg" style="margin-top:14px"><b>Отчёт готов, можно скачать</b>' +
+        '<p class="check-note" style="margin:6px 0 10px">' + note +
+        ' HTML открывается двойным щелчком, markdown удобно вставить в переписку. Версия для ИИ ' +
+        'короче и с машинными кодами проблем: файл можно отдать своему агенту, и вместе с ' +
+        'подключённым uCoz MCP он внесёт правки.</p><div class="dl-row">' +
+        dlBtn('human-ru', 'Для человека, MD') +
+        dlBtn('html', 'Для человека, HTML') +
+        dlBtn('agent-ru', 'Для ИИ, RU') +
+        dlBtn('agent-en', 'Для ИИ, EN') +
+        dlBtn('json', 'JSON') +
+      '</div></div>';
+
+      var host = document.createElement('div');
+      host.innerHTML = html;
+      out.appendChild(host);
+      host.querySelectorAll('[data-dl]').forEach(function (el) {
+        el.addEventListener('click', function () { saveReport(el.getAttribute('data-dl')); });
+      });
     }
 
     function renderDeep(data) {
@@ -873,11 +922,11 @@ npm install --omit=dev</code></pre>
      * Сохраняет отчёт в файл. Имя собираем из домена и даты, чтобы в папке загрузок
      * не копились одинаковые report.md, между которыми не разобрать, что к чему.
      */
-    function saveReport(kind, data) {
-      var files = data.reports || {};
+    function saveReport(kind) {
+      var files = lastReports || {};
       var host = 'site';
-      try { host = new URL(data.url).hostname.replace(/^www\./, ''); } catch (e) {}
-      var stamp = (data.scannedAt || new Date().toISOString()).slice(0, 10);
+      try { host = new URL(lastMeta.url).hostname.replace(/^www\./, ''); } catch (e) {}
+      var stamp = (lastMeta.scannedAt || new Date().toISOString()).slice(0, 10);
 
       var map = {
         'human-ru': [files.humanMd, 'seo-otchet-' + host + '-' + stamp + '.md', 'text/markdown'],
@@ -891,11 +940,9 @@ npm install --omit=dev</code></pre>
 
       var body = entry[0];
       if (kind === 'json') {
-        // В JSON сами тексты отчётов не кладём: это те же данные во второй раз,
-        // файл раздувается вдвое без всякой пользы.
-        var copy = {};
-        Object.keys(data).forEach(function (k) { if (k !== 'reports') copy[k] = data[k]; });
-        body = JSON.stringify(copy, null, 2);
+        // В JSON кладём машинные данные без текстов отчётов: это те же сведения во второй
+        // раз, файл раздувался бы вдвое без пользы.
+        body = JSON.stringify(lastJson || {}, null, 2);
       }
       if (!body) return;
 
