@@ -143,6 +143,12 @@ async function fetchPage(url) {
       html
     };
   } catch (error) {
+    // «Страницу не удалось загрузить: fetch failed» не говорит владельцу сайта ничего.
+    // Чаще всего за этим стоит конкретная поломка, и её видно, если не идти по
+    // перенаправлению, а посмотреть на него. Найдено на живом сайте клиента: страница
+    // отвечала Location: // без домена. По такому адресу не пройдёт ни браузер, ни
+    // поисковый робот, и по сообщению «fetch failed» об этом не догадаться.
+    const explained = await explainFetchFailure(url);
     return {
       url,
       status: 0,
@@ -151,9 +157,50 @@ async function fetchPage(url) {
       bytes: 0,
       ms: Date.now() - started,
       html: '',
-      checks: [issue('critical', 'page.fetch_failed', url, `Страницу не удалось загрузить: ${error.message}`, 'Проверьте хостинг, DNS, SSL или правила блокировки.')]
+      checks: [issue('critical', 'page.fetch_failed', url, explained?.message ?? `Страницу не удалось загрузить: ${error.message}`, explained?.fix ?? 'Проверьте хостинг, DNS, SSL или правила блокировки.')]
     };
   }
+}
+
+/**
+ * Пытается объяснить, почему страница не загрузилась.
+ *
+ * Запрашиваем ещё раз, но перенаправлениям не следуем: тогда видно сам заголовок
+ * Location, а не общий отказ клиента. Если объяснить не получилось, возвращаем null и
+ * в отчёт идёт исходное сообщение.
+ */
+async function explainFetchFailure(url) {
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { 'user-agent': USER_AGENT },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch {
+    return null;
+  }
+
+  if (response.status < 300 || response.status >= 400) return null;
+
+  const location = response.headers.get('location');
+  if (!location) {
+    return {
+      message: `Страница отвечает перенаправлением ${response.status}, но не говорит куда: заголовок Location пустой.`,
+      fix: 'Укажите в Location полный адрес назначения или уберите перенаправление.'
+    };
+  }
+
+  try {
+    new URL(location, url);
+  } catch {
+    return {
+      message: `Страница перенаправляет на нерабочий адрес «${location}»: по нему не пройдут ни браузер, ни поисковый робот.`,
+      fix: 'Укажите в заголовке Location полный адрес вида https://site.ru/stranica или путь от корня вида /stranica.'
+    };
+  }
+
+  return null;
 }
 
 async function auditSiteFiles(origin) {
