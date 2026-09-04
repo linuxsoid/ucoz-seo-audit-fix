@@ -28,7 +28,13 @@ export async function auditSite(startUrl, options = {}) {
       for (const link of links) {
         if (pages.length + queue.length >= maxPages) break;
         if (isServiceUrl(link.href, origin)) {
-          skippedUrls.push({ href: link.href, foundOn: url, reason: 'Служебная ссылка uCoz не относится к публичному SEO-аудиту.' });
+          skippedUrls.push({
+            href: link.href,
+            foundOn: url,
+            reason: isSystemPage(new URL(link.href, origin).pathname)
+              ? 'Служебная страница движка: владелец её не редактирует, SEO-ценности нет.'
+              : 'Служебная ссылка админки, к публичному SEO не относится.'
+          });
           continue;
         }
         if (link.internal && link.crawlable && !seen.has(link.href) && !queue.includes(link.href)) {
@@ -194,11 +200,14 @@ function auditHtml(page, links) {
   else checks.push(pass('page.ok', page.url, `Страница возвращает HTTP ${page.status}.`));
 
   if (!title) checks.push(issue('critical', 'meta.title_missing', page.url, 'Отсутствует title.', 'Добавьте уникальный и понятный <title>.'));
-  else if (title.length < 10 || title.length > 65) checks.push(issue('recommended', 'meta.title_length', page.url, `Длина title: ${title.length} символов.`, 'Ориентир: примерно 10-65 символов.'));
+  else if (title.length < 10 || title.length > 65) checks.push(issue('recommended', 'meta.title_length', page.url,
+    // Показываем сам текст: без него человек видит «82 символа» и не понимает, что резать.
+    `Длина title ${title.length} символов: «${title}»`, 'Ориентир: примерно 10-65 символов.', { value: title }));
   else checks.push(pass('meta.title_ok', page.url, 'Title заполнен.'));
 
   if (!description) checks.push(issue('critical', 'meta.description_missing', page.url, 'Отсутствует meta description.', 'Добавьте уникальное описание страницы.'));
-  else if (description.length < 50 || description.length > 170) checks.push(issue('recommended', 'meta.description_length', page.url, `Длина description: ${description.length} символов.`, 'Ориентир: примерно 50-170 символов.'));
+  else if (description.length < 50 || description.length > 170) checks.push(issue('recommended', 'meta.description_length', page.url,
+    `Длина description ${description.length} символов: «${description}»`, 'Ориентир: примерно 50-170 символов.', { value: description }));
   else checks.push(pass('meta.description_ok', page.url, 'Meta description заполнен.'));
 
   if (!h1s.length) checks.push(issue('recommended', 'content.h1_missing', page.url, 'Отсутствует H1.', 'Добавьте один понятный заголовок H1.'));
@@ -412,19 +421,58 @@ function normalizeUrl(url) {
   return parsed.href;
 }
 
+/**
+ * Служебные адреса, которые не относятся к публичному SEO сайта.
+ *
+ * Делятся на два класса, и важно понимать разницу.
+ *
+ * Первый класс: ссылки админки и редактирования. Это вообще не страницы сайта,
+ * посетитель их не видит, поисковик тоже.
+ *
+ * Второй класс: автогенерируемые страницы конструктора. Политика конфиденциальности,
+ * пользовательское соглашение, оформление заказа, страница 404. Формально это
+ * настоящие страницы, но владелец их не пишет и не редактирует, а SEO-ценности у них
+ * нет. Поймано на живом сайте genomplus.ru: 18 замечаний из 20 висели ровно на двух
+ * таких страницах, и человек видел пугающий счётчик вместо двух реальных проблем.
+ * Считать их вместе с контентными страницами значит врать пользователю о масштабе.
+ */
 function isServiceUrl(url, origin) {
   try {
     const parsed = new URL(url, origin);
     if (parsed.origin !== origin) return false;
+
+    // Админка и редактирование
     if (parsed.pathname.startsWith('/panel')) return true;
     if (parsed.pathname === '/admin') return true;
     if (/^\/index\/31-\d+-0-\d+-\d+$/i.test(parsed.pathname)) return true;
     if (/^\/index\/\d+-\d+-0-\d+-\d+$/i.test(parsed.pathname) && parsed.searchParams.has('edit')) return true;
-    return false;
+
+    return isSystemPage(parsed.pathname);
   } catch {
     return false;
   }
 }
+
+/**
+ * Автогенерируемые страницы конструктора. У uKit они начинаются с двух подчёркиваний,
+ * у uCoz встречаются привычные имена вроде /privacy или /404.html.
+ */
+function isSystemPage(pathname) {
+  const path = String(pathname || '').toLowerCase();
+  const last = path.replace(/\/+$/, '').split('/').pop() || '';
+
+  // uKit генерирует их с префиксом __ , это самый надёжный признак
+  if (last.startsWith('__')) return true;
+
+  return SYSTEM_PAGE_NAMES.some((name) => last === name || last === name + '.html');
+}
+
+const SYSTEM_PAGE_NAMES = [
+  'privacy', 'privacy-policy', 'privacy_policy', 'policy',
+  'agreement', 'user-agreement', 'user_agreement', 'terms', 'oferta',
+  'checkout', 'cart', 'order-success', 'order_success',
+  '404', 'not-found'
+];
 
 function dedupeSkipped(skippedUrls) {
   const seen = new Set();

@@ -385,12 +385,26 @@ function compactResult(result, ms) {
     return b.count - a.count;
   });
 
+  // Disallow: / это не рядовое замечание, а выключенный сайт: страниц нет в индексе,
+  // и чинить title, description или og бессмысленно, пока запрет не снят. Поэтому такая
+  // находка поднимается отдельным блокером, а остальные замечания витрина сворачивает.
+  const blockerIndex = grouped.findIndex((issue) => issue.code === 'site.robots_blocks_all');
+  const blocker = blockerIndex >= 0 ? grouped.splice(blockerIndex, 1)[0] : null;
+
   return {
     url: result.startUrl,
     scannedAt: result.scannedAt,
     ms,
     pagesScanned: (result.pages ?? []).length,
     summary: result.summary,
+    blocker: blocker ? {
+      code: blocker.code,
+      message: 'Сайт закрыт от поисковых систем в robots.txt.',
+      fix: 'Пока запрет не снят, остальные правки не дадут эффекта: страницы не попадут в индекс. Уберите Disallow: / и проверьте сайт заново.'
+    } : null,
+    // Служебные страницы движка в счёт не идут. Но сказать о них надо, иначе человек
+    // не поймёт, почему проверено меньше страниц, чем он ожидал.
+    systemPagesSkipped: (result.skippedUrls ?? []).length,
     issues: grouped.slice(0, 25),
     pages: (result.pages ?? []).map((page) => ({
       url: page.url,

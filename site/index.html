@@ -186,7 +186,11 @@
       border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
     .check-form button[disabled] { opacity: .55; cursor: progress; }
     .check-note { color: var(--muted); font-size: 14px; margin: 0; }
-    .check-out { margin-top: 20px; }
+    .check-out { margin-top: 20px; scroll-margin-top: 80px; }
+    .spin { display:inline-block; width:14px; height:14px; margin-right:9px;
+      vertical-align:-2px; border:2px solid var(--line); border-top-color: var(--accent);
+      border-radius:50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .check-msg { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
       background: var(--panel); }
     .check-msg.bad { border-color: #c0503c; color: #c0503c; }
@@ -469,7 +473,12 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
 
       button.disabled = true;
       button.textContent = 'Проверяю';
-      out.innerHTML = '<div class="check-msg">Обхожу страницы, это несколько секунд.</div>';
+      out.innerHTML = '<div class="check-msg"><span class="spin"></span>' +
+        'Обхожу страницы, это несколько секунд.</div>';
+      // Результат дорисовывается ниже формы, и на ноутбуке он оказывается за сгибом:
+      // человек жмёт кнопку и думает, что ничего не произошло. Подводим к нему сразу,
+      // ещё на стадии загрузки, чтобы было видно и что идёт работа, и где будет ответ.
+      scrollToResult();
 
       fetch(API, {
         method: 'POST',
@@ -502,6 +511,15 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
     function render(data) {
       lastUrl = data.url || input.value.trim();
       var s = data.summary || {};
+
+      // Блокер идёт до всего остального и в единственном числе. Если сайт закрыт от
+      // индексации, счётчики мета-тегов не имеют значения: страниц нет в поиске.
+      var blocker = data.blocker
+        ? '<div class="check-msg bad" style="margin-bottom:14px">' +
+          '<b>' + escapeHtml(data.blocker.message) + '</b><div class="why">' +
+          escapeHtml(data.blocker.fix) + '</div></div>'
+        : '';
+
       var scores =
         '<div class="check-scores">' +
           score('crit', s.critical || 0, 'критичных') +
@@ -510,9 +528,26 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
           score('', data.pagesScanned || 0, 'страниц проверено') +
         '</div>';
 
-      var issues = (data.issues || []).length
+      // Служебные страницы конструктора (политика, соглашение, оформление заказа,
+      // страница 404) в счёт не идут: владелец их не пишет и не редактирует. Но
+      // умалчивать о них нельзя, иначе непонятно, почему страниц меньше ожидаемого.
+      var skipped = data.systemPagesSkipped
+        ? '<p class="check-note">Служебные страницы движка пропущены: ' +
+          data.systemPagesSkipped + '. Это политика, соглашение, оформление заказа и ' +
+          'подобные автогенерируемые страницы, их SEO не влияет на продвижение сайта.</p>'
+        : '';
+
+      var issuesHtml = (data.issues || []).length
         ? '<ul class="check-list">' + data.issues.map(row).join('') + '</ul>'
         : '<div class="check-msg">По текущему набору проверок заметных проблем не обнаружено.</div>';
+
+      // Когда есть блокер, остальные замечания прячем под раскрытие: чинить их сейчас
+      // всё равно рано, а на экране они перебивают главное.
+      var issues = data.blocker
+        ? '<div class="check-msg"><a href="javascript:void(0)" id="show-rest">' +
+          'Показать остальные замечания (' + (data.issues || []).length + ')</a>' +
+          '<div id="rest-issues" hidden style="margin-top:10px">' + issuesHtml + '</div></div>'
+        : issuesHtml;
 
       var deep =
         '<div class="check-msg" style="margin-top:14px">' +
@@ -530,7 +565,7 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
         'применит подготовленные изменения и покажет diff до записи. ' +
         '<a href="#install">Как подключить</a></div>';
 
-      out.innerHTML = scores + issues + deep + cta;
+      out.innerHTML = blocker + scores + skipped + issues + deep + cta;
 
       // Раскрытие списка страниц. Отчёт группирует проблемы по типу, иначе тридцать
       // рекомендаций превращаются в тридцать одинаковых строк. Но без списка адресов
@@ -547,6 +582,30 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
 
       var deepBtn = document.getElementById('check-deep');
       if (deepBtn) { deepBtn.addEventListener('click', runDeep); }
+
+      var showRest = document.getElementById('show-rest');
+      if (showRest) {
+        showRest.addEventListener('click', function () {
+          var box = document.getElementById('rest-issues');
+          var hidden = box.hasAttribute('hidden');
+          if (hidden) { box.removeAttribute('hidden'); } else { box.setAttribute('hidden', ''); }
+          showRest.textContent = hidden
+            ? 'Скрыть остальные замечания'
+            : 'Показать остальные замечания (' + (box.querySelectorAll('li').length) + ')';
+        });
+      }
+
+      scrollToResult();
+    }
+
+    /** Подводит экран к блоку результата, не дёргая страницу, если он и так виден. */
+    function scrollToResult() {
+      var box = document.getElementById('check-out');
+      if (!box) return;
+      var top = box.getBoundingClientRect().top;
+      if (top < 0 || top > window.innerHeight * 0.6) {
+        box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
 
     function runDeep() {
