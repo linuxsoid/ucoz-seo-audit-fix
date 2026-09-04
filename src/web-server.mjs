@@ -37,6 +37,10 @@
  *   RATE_WINDOW_MS   длина окна лимита в миллисекундах (по умолчанию 600000, то есть 10 минут)
  *   MAX_CONCURRENT   сколько аудитов выполняется одновременно на весь сервис (по умолчанию 2)
  *   TRUST_PROXY      1, если сервис стоит за nginx и настоящий IP приходит в X-Forwarded-For
+ *   BASE_PATH        префикс, на который смонтировано приложение, например /seo. Нужен,
+ *                    когда хостинг вешает приложение не в корень домена: Passenger отдаёт
+ *                    нам полный путь вместе с префиксом, и без этой настройки все маршруты
+ *                    просто не совпадут. Если приложение в корне, оставить пустым
  *   ALLOW_PRIVATE    1 отключает защиту от приватных адресов. ТОЛЬКО для локальной отладки,
  *                    на публичном хосте включать нельзя
  */
@@ -57,6 +61,14 @@ const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 10 * 60 * 1000);
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ALLOW_PRIVATE = process.env.ALLOW_PRIVATE === '1';
+// Хостинг может смонтировать приложение по адресу вида https://site/seo/, и тогда
+// в req.url приходит /seo/healthz, а не /healthz. Префикс снимаем один раз здесь,
+// чтобы весь остальной роутинг не знал, куда именно приложение подвесили.
+// Passenger в ряде сборок сам кладёт префикс в PASSENGER_BASE_URI, используем его как
+// значение по умолчанию.
+const BASE_PATH = String(process.env.BASE_PATH ?? process.env.PASSENGER_BASE_URI ?? '')
+  .trim()
+  .replace(/\/+$/, '');
 // Аудит восьми страниц укладывается в несколько секунд. 60 секунд это аварийный потолок на
 // случай очень медленного сайта: лучше вернуть посетителю честную ошибку, чем держать слот.
 const AUDIT_TIMEOUT_MS = 60_000;
@@ -71,25 +83,26 @@ let running = 0;
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    const path = stripBasePath(url.pathname);
 
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
       return sendHtml(res, 200, renderPage());
     }
-    if (req.method === 'GET' && url.pathname === '/healthz') {
+    if (req.method === 'GET' && path === '/healthz') {
       return sendJson(res, 200, { ok: true, running, maxPages: MAX_PAGES });
     }
-    if (req.method === 'OPTIONS' && url.pathname === '/api/audit') {
+    if (req.method === 'OPTIONS' && path === '/api/audit') {
       // Форму можно встроить на лендинг seoaudit.ucoz.net, а он живёт на другом origin,
       // поэтому CORS для этого маршрута открыт осознанно. Эндпоинт ничего не пишет и не
       // читает состояние пользователя, отдавать его кросс-доменно безопасно.
       return sendCorsPreflight(res);
     }
-    if (req.method === 'POST' && url.pathname === '/api/audit') {
+    if (req.method === 'POST' && path === '/api/audit') {
       return await handleAudit(req, res);
     }
     // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
     // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
-    if (url.pathname === '/mcp') {
+    if (path === '/mcp') {
       return await handleMcpRequest(req, res);
     }
 
@@ -98,6 +111,17 @@ const server = createServer(async (req, res) => {
     return sendJson(res, 500, { error: 'Внутренняя ошибка', detail: String(error?.message ?? error) });
   }
 });
+
+/**
+ * Снимает префикс монтирования с пути запроса. Без BASE_PATH возвращает путь как есть.
+ * Возвращает всегда путь, начинающийся со слэша, чтобы сравнения ниже были простыми.
+ */
+function stripBasePath(pathname) {
+  if (!BASE_PATH) return pathname;
+  if (pathname === BASE_PATH) return '/';
+  if (pathname.startsWith(BASE_PATH + '/')) return pathname.slice(BASE_PATH.length) || '/';
+  return pathname;
+}
 
 async function handleAudit(req, res) {
   const ip = clientIp(req);
@@ -512,6 +536,7 @@ function escapeHtml(value) {
 server.listen(PORT, HOST, () => {
   console.log(`SEO web checker слушает http://${HOST}:${PORT}`);
   console.log(`страниц за проверку: ${MAX_PAGES}, лимит: ${RATE_LIMIT} за ${RATE_WINDOW_MS / 60000} мин, параллельно: ${MAX_CONCURRENT}`);
-  console.log(`remote MCP: http://${HOST}:${PORT}/mcp`);
+  console.log(`remote MCP: http://${HOST}:${PORT}${BASE_PATH}/mcp`);
+  if (BASE_PATH) console.log(`приложение смонтировано на префикс ${BASE_PATH}`);
   if (ALLOW_PRIVATE) console.warn('ВНИМАНИЕ: ALLOW_PRIVATE=1, защита от приватных адресов выключена. Только для локальной отладки.');
 });
