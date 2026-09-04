@@ -402,7 +402,10 @@ async function handleDeepAudit(req, res) {
     const lighthouse = await runLighthouseAudit(target, {
       formFactor,
       categories: ['performance', 'accessibility', 'best-practices', 'seo'],
-      output: []
+      // Оба формата нужны: именно эти два файла человек забирает из Lighthouse руками.
+      // На диск их не пишем, они живут в памяти сессии и уходят по ссылке.
+      output: ['json', 'html'],
+      persistReports: false
     });
     const browser = await collectBrowserDiagnostics(target, { formFactor, waitMs: 4000 });
 

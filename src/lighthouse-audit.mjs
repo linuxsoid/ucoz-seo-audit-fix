@@ -124,6 +124,9 @@ async function runLighthouseInternal(url, options = {}) {
   const categories = normalizeCategories(options.categories);
   const formFactor = options.formFactor === 'desktop' ? 'desktop' : 'mobile';
   const output = normalizeOutput(options.output);
+  // Сохранять отчёты на диск нужно не всегда. В витрине они живут только в памяти
+  // сессии и уходят по ссылке: класть их ещё и на диск сервера незачем.
+  const persistReports = options.persistReports !== false;
 
   let lighthouse;
   let chromeLauncher;
@@ -155,7 +158,7 @@ async function runLighthouseInternal(url, options = {}) {
       throttlingMethod: 'simulate'
     });
 
-    const reportFiles = await writeLighthouseReports(result, { output });
+    const reportFiles = persistReports ? await writeLighthouseReports(result, { output }) : [];
     // Официальный отчёт Lighthouse в исходном виде. Именно его человек открывает руками,
     // и держать его только файлом на нашем диске бессмысленно: в удалённом режиме
     // пользователь до этого диска не доберётся.
@@ -303,12 +306,17 @@ function extractAudits(lhr) {
 }
 
 async function writeLighthouseReports(result, options = {}) {
+  const outputs0 = normalizeOutput(options.output);
+  // Пустой список форматов означает «файлы не нужны». Каталог при этом тоже не создаём:
+  // пустая папка reports на сервере только сбивает с толку.
+  if (!outputs0.length) return [];
+
   const outDir = resolve('reports');
   await mkdir(outDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const files = [];
   const reports = Array.isArray(result.report) ? result.report : [result.report];
-  const outputs = normalizeOutput(options.output);
+  const outputs = outputs0;
 
   for (let index = 0; index < outputs.length; index += 1) {
     const ext = outputs[index] === 'html' ? 'html' : 'json';
