@@ -193,6 +193,59 @@ async function deliverReports(result, format) {
   return { report: out, reportFiles: [] };
 }
 
+/**
+ * Готовит результат к отправке в MCP-клиент.
+ *
+ * Через MCP результат читает не человек, а модель, и весь он попадает ей в контекст.
+ * Поэтому здесь остаётся только то, что можно осмысленно прочитать, а объёмные вложения
+ * выбрасываются. Найдено на живом сайте: ответ audit_site весил 5 мегабайт и не влезал
+ * в ответ вообще. Разбор по весу был такой:
+ *   1.5 МБ  готовые файлы отчёта Lighthouse, HTML и JSON целиком;
+ *   0.9 МБ  исходный HTML каждой обойдённой страницы;
+ *   0.6 МБ  скриншот страницы в base64;
+ *   вдвое   потому что тот же объект отдавался ещё раз под английским ключом.
+ *
+ * Ничего из этого модели не нужно: выводы уже сделаны и лежат в checks и summary.
+ * Файлы отчётов и скриншот забираются с витрины по ссылке, а не через контекст.
+ */
+function forTransport(result) {
+  if (!result || typeof result !== 'object') return result;
+  const out = { ...result };
+
+  if (Array.isArray(out.pages)) {
+    // Исходный HTML страниц нужен был только самим проверкам, и они уже отработали.
+    out.pages = out.pages.map(({ html, ...page }) => page);
+  }
+
+  if (out.lighthouse) out.lighthouse = trimLighthouse(out.lighthouse);
+  if (out.browser) out.browser = trimBrowser(out.browser);
+
+  return out;
+}
+
+/** У Lighthouse оставляем выводы и оценки, а готовые файлы отчёта выбрасываем. */
+function trimLighthouse(lighthouse) {
+  const { rawHtml, rawJson, lhr, ...rest } = lighthouse;
+  return {
+    ...rest,
+    // Пофайловый разбор всех аудитов это ещё 58 КБ ради данных, которые уже сведены
+    // в summary.topIssues. Оставляем только шапку отчёта.
+    lhr: lhr ? {
+      lighthouseVersion: lhr.lighthouseVersion,
+      finalDisplayedUrl: lhr.finalDisplayedUrl,
+      requestedUrl: lhr.requestedUrl,
+      fetchTime: lhr.fetchTime,
+      categories: lhr.categories
+    } : undefined
+  };
+}
+
+/** У браузерной части оставляем разбор, а сырую запись сети и скриншот выбрасываем. */
+function trimBrowser(browser) {
+  const { har, screenshotBase64, consoleLog, ...rest } = browser;
+  return rest;
+}
+
 export async function callTool(name, args) {
   if (name === 'audit_site') {
     const result = await auditSite(args.url, {
@@ -203,31 +256,36 @@ export async function callTool(name, args) {
       lighthouseOutput: ['json', 'html']
     });
     const delivered = await deliverReports(result, args.format);
+    // Один и тот же объект под русским и английским ключом это буквально двойной вес
+    // ответа. Отдаём его один раз, английский ключ ссылается на тот же объект.
+    const light = forTransport(result);
     return {
       'сводка': result.summary,
       'провереноСтраниц': result.pages.length,
       'файлыОтчётов': delivered.reportFiles,
-      'результатАудита': result,
+      'результатАудита': light,
       summary: result.summary,
       pagesScanned: result.pages.length,
       ...delivered,
-      auditResult: result
+      auditResult: light
     };
   }
 
   if (name === 'run_lighthouse_audit') {
-    return runLighthouseAudit(args.url, {
+    const lighthouse = await runLighthouseAudit(args.url, {
       formFactor: args.formFactor ?? 'mobile',
       categories: args.categories,
       output: args.output ?? ['json', 'html']
     });
+    return trimLighthouse(lighthouse);
   }
 
   if (name === 'collect_browser_diagnostics') {
-    return collectBrowserDiagnostics(args.url, {
+    const browser = await collectBrowserDiagnostics(args.url, {
       waitMs: args.waitMs,
       formFactor: args.formFactor
     });
+    return trimBrowser(browser);
   }
 
   if (name === 'plan_safe_fixes') {
@@ -241,11 +299,11 @@ export async function callTool(name, args) {
       'сводка': result.summary,
       'провереноФрагментов': result.pages.length,
       'файлыОтчётов': delivered.reportFiles,
-      'результатАудита': result,
+      'результатАудита': forTransport(result),
       summary: result.summary,
       fragmentsScanned: result.pages.length,
       ...delivered,
-      auditResult: result
+      auditResult: forTransport(result)
     };
   }
 

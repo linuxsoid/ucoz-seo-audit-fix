@@ -126,7 +126,9 @@ async function runLighthouseInternal(url, options = {}) {
   const output = normalizeOutput(options.output);
   // Сохранять отчёты на диск нужно не всегда. В витрине они живут только в памяти
   // сессии и уходят по ссылке: класть их ещё и на диск сервера незачем.
-  const persistReports = options.persistReports !== false;
+  // На нашем хостинге по умолчанию тоже не пишем: путь к файлу на нашем диске удалённому
+  // клиенту бесполезен, а каждый вызов оставлял бы там по полтора мегабайта навсегда.
+  const persistReports = options.persistReports ?? process.env.MCP_HOSTED !== '1';
 
   let lighthouse;
   let chromeLauncher;
