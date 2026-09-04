@@ -83,27 +83,27 @@ let running = 0;
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    const path = stripBasePath(url.pathname);
+    const route = matchRoute(url.pathname);
 
-    if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
-      return sendHtml(res, 200, renderPage());
-    }
-    if (req.method === 'GET' && path === '/healthz') {
+    if (req.method === 'GET' && route === 'healthz') {
       return sendJson(res, 200, { ok: true, running, maxPages: MAX_PAGES });
     }
-    if (req.method === 'OPTIONS' && path === '/api/audit') {
+    if (req.method === 'OPTIONS' && route === 'audit') {
       // Форму можно встроить на лендинг seoaudit.ucoz.net, а он живёт на другом origin,
       // поэтому CORS для этого маршрута открыт осознанно. Эндпоинт ничего не пишет и не
       // читает состояние пользователя, отдавать его кросс-доменно безопасно.
       return sendCorsPreflight(res);
     }
-    if (req.method === 'POST' && path === '/api/audit') {
+    if (req.method === 'POST' && route === 'audit') {
       return await handleAudit(req, res);
     }
     // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
     // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
-    if (path === '/mcp') {
+    if (route === 'mcp') {
       return await handleMcpRequest(req, res);
+    }
+    if (req.method === 'GET') {
+      return sendHtml(res, 200, renderPage());
     }
 
     return sendJson(res, 404, { error: 'Не найдено' });
@@ -113,14 +113,31 @@ const server = createServer(async (req, res) => {
 });
 
 /**
- * Снимает префикс монтирования с пути запроса. Без BASE_PATH возвращает путь как есть.
- * Возвращает всегда путь, начинающийся со слэша, чтобы сравнения ниже были простыми.
+ * Определяет, какой маршрут запрошен, независимо от того, куда хостинг подвесил приложение.
+ *
+ * Зачем так, а не сравнение путей напрямую. Хостинг серверных скриптов uCoz монтирует
+ * приложение не в корень домена, а на префикс вида /seo, и Passenger отдаёт нам полный
+ * путь вместе с префиксом. Сравнение pathname === '/healthz' в такой конфигурации не
+ * совпадёт никогда, и сервер будет отвечать собственным 404 на собственные же маршруты.
+ *
+ * Можно было бы требовать переменную BASE_PATH, но тогда развёртывание ломается от одной
+ * забытой настройки в панели, причём ломается молча. Поэтому маршрут узнаётся по окончанию
+ * пути: маршрутов всего три, они уникальны, и любой префикс перед ними значения не имеет.
+ * BASE_PATH остаётся как явное переопределение, если однажды понадобится точный контроль.
+ *
+ * Всё, что не совпало ни с одним маршрутом, при GET отдаёт витрину. Для приложения из
+ * четырёх ручек это правильное поведение: человек, открывший любой адрес внутри
+ * приложения, должен увидеть форму проверки, а не сообщение об ошибке.
  */
-function stripBasePath(pathname) {
-  if (!BASE_PATH) return pathname;
-  if (pathname === BASE_PATH) return '/';
-  if (pathname.startsWith(BASE_PATH + '/')) return pathname.slice(BASE_PATH.length) || '/';
-  return pathname;
+function matchRoute(pathname) {
+  const path = BASE_PATH && (pathname === BASE_PATH || pathname.startsWith(BASE_PATH + '/'))
+    ? (pathname.slice(BASE_PATH.length) || '/')
+    : pathname;
+
+  if (path === '/healthz' || path.endsWith('/healthz')) return 'healthz';
+  if (path === '/api/audit' || path.endsWith('/api/audit')) return 'audit';
+  if (path === '/mcp' || path.endsWith('/mcp')) return 'mcp';
+  return 'page';
 }
 
 async function handleAudit(req, res) {

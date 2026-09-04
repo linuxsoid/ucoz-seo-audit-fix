@@ -207,6 +207,12 @@
     .check-list .sev.recommended { background: #fbf1dd; color: #8a5d10; }
     .check-list .why { color: var(--muted); font-size: 14px; margin-top: 6px; }
     </style>
+  <script>
+  /* Адрес сервиса проверки. Сам сервис поднят на серверных скриптах uCoz
+     (Node-приложение на этом же аккаунте), поэтому лендинг только шлёт в него
+     запрос. CORS на сервисе открыт, отдельной настройки не требуется. */
+  window.SEO_AUDIT_API = 'https://u726012496.usites.app/seo/api/audit';
+  </script>
 </head>
 <body>
   <header>
