@@ -20,7 +20,7 @@
     "operatingSystem": "Windows, macOS, Linux",
     "description": "MCP-сервер для SEO-аудита сайтов uCoz, Lighthouse-проверок, отчетов и safe-fix workflow.",
     "url": "https://seoaudit.ucoz.net/",
-    "downloadUrl": "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz"
+    "downloadUrl": "https://github.com/linuxsoid/ucoz-seo-audit-fix"
   }
   </script>
   <style>
@@ -212,7 +212,7 @@
     .check-list .why { color: var(--muted); font-size: 14px; margin-top: 6px; }
     
     /* Защита от горизонтальной прокрутки.
-       Причина была в блоке «Установка»: конфиги MCP лежат в <pre> длинными строками,
+       Причина была в блоке «Установка»: конфиги MCP лежат в блоках кода длинными строками,
        а элементы grid по умолчанию имеют min-width auto и растягиваются под содержимое,
        вместо того чтобы дать ему прокрутку. Из-за этого вся страница становилась шире
        экрана. Лечим в корне: разрешаем колонкам сжиматься, а длинному коду прокручиваться. */
@@ -220,7 +220,7 @@
     .step, .card, .grid > *, .hero > * { min-width: 0; }
     /* Правило выше закрывает сами колонки, но внутри .step есть ещё один div-обёртка.
        Он тоже элемент grid, и его min-width по умолчанию равен auto, поэтому он
-       растягивался под ширину <pre> и тянул за собой всю страницу. Замерено: обёртка
+       растягивался под ширину блока кода и тянул за собой всю страницу. Замерено: обёртка
        843 px внутри колонки в 331 px. */
     .step > *, .card > * { min-width: 0; }
     pre { max-width: 100%; overflow-x: auto; }
@@ -271,7 +271,7 @@
   <main>
     <div class="wrap hero">
       <div>
-        <div class="eyebrow">MCP для uCoz</div>
+        <div class="eyebrow">Проверка сайта и MCP</div>
         <h1>SEO-аудит сайта без ручной рутины</h1>
         <p class="lead">Проверьте сайт прямо здесь, без установки и регистрации. Ключи и подключения нужны только на втором шаге, если вы захотите, чтобы найденное правилось автоматически прямо в шаблонах сайта.</p>
         <div class="actions">
@@ -281,7 +281,7 @@
         </div>
       </div>
       <div class="report" aria-label="Пример отчета">
-        <div class="report-top"><a href="/seo-mcp/seo-report.html">seo-report.html</a><span>1 страница</span></div>
+        <div class="report-top"><a href="/seo-mcp/seo-report.html">Пример отчёта</a><span>1 страница</span></div>
         <div class="score">
           <div><b>8</b>критичных</div>
           <div><b>5</b>рекомендаций</div>
@@ -297,9 +297,9 @@
     <section id="check">
       <div class="wrap">
         <h2>Проверить сайт прямо сейчас</h2>
-        <p class="lead">Введите адрес. Проверим мета-теги, заголовки, canonical, Open Graph,
-          Schema.org, картинки без alt, robots, sitemap и внутренние ссылки. Установка и
-          регистрация не нужны, сайт при проверке только читается и не меняется.</p>
+        <p class="lead">Введите адрес. Проверим индексируемость, сертификат, мета-теги, заголовки, разметку,
+          картинки без alt, robots, sitemap, перелинковку, контакты и счётчик аналитики.
+          Установка и регистрация не нужны, сайт при проверке только читается и не меняется.</p>
 
         <form class="check-form" id="check-form">
           <input id="check-url" type="text" inputmode="url" placeholder="mysite.ucoz.net"
@@ -378,7 +378,7 @@
           <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
           <article class="card"><h3>Проверка по URL без установки</h3><p>Публичная форма на этой странице: вводите адрес, через несколько секунд видите список проблем. Ничего ставить не нужно, сайт при проверке только читается.</p></article>
           <article class="card"><h3>Удобные форматы отчёта</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
-          <article class="card"><h3>Lighthouse без ручного запуска</h3><p>Проверка Lighthouse запускается автоматически и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
+          <article class="card"><h3>Lighthouse без DevTools</h3><p>Не нужно открывать инструменты разработчика и гонять тесты вручную: Performance, SEO, Accessibility, Best Practices и метрики загрузки попадают в отчёт одним нажатием.</p></article>
           <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
           <article class="card wide"><h3>Интеграция с uCoz</h3><p>Сама проверка сайту ничего не требует: страницы читаются как их видит поисковик. Официальный <code>ucoz-mcp</code> подключается отдельно и нужен только для того, чтобы прочитать шаблоны и файлы по FTP и внести в них правки после вашего подтверждения.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
           <article class="card"><h3>Проверка после исправлений</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
@@ -432,7 +432,7 @@
           <thead><tr><th>Блок отчета</th><th>Зачем нужен</th><th>Пример</th></tr></thead>
           <tbody>
             <tr><td>Публичные страницы</td><td>Все проблемы одной страницы в одном месте.</td><td><code>/shop/2/desc/product</code> и список замечаний к ней.</td></tr>
-            <tr><td>Шаблоны и источники</td><td>Проблемы HTML-шаблонов, переданных из админки или FTP.</td><td>“Страница товара”, <code>module_id=20</code>, <code>template_id=4</code>.</td></tr>
+            <tr><td>Шаблоны и источники</td><td>Проблемы самих HTML-шаблонов. Появляется только при подключённом официальном uCoz MCP: без него шаблоны читать нечем.</td><td>“Страница товара”, <code>module_id=20</code>, <code>template_id=4</code>.</td></tr>
             <tr><td>Lighthouse / производительность</td><td>Performance, SEO, Accessibility, Best Practices и основные метрики.</td><td>LCP, FCP, CLS, TBT, Speed Index, вес страницы.</td></tr>
             <tr><td>Пропущенные служебные ссылки</td><td>Показывает, что админские URL были найдены, но исключены из публичного SEO-аудита.</td><td><code>/index/31-...</code> не считается страницей сайта.</td></tr>
           </tbody>
@@ -453,8 +453,8 @@
             <li><strong>Доверие и аналитика</strong><span>Телефон, почта или мессенджер на сайте, счётчик Яндекс.Метрики или Google Analytics.</span></li>
             <li><strong>Meta</strong><span>Наличие и длина title/description, дубли описаний, viewport и lang.</span></li>
             <li><strong>Social preview</strong><span>Open Graph и Twitter Card: title, description, type, url.</span></li>
-            <li><strong>Структура страницы</strong><span>H1, изображения без alt, JSON-LD Schema.org и ошибки парсинга JSON-LD.</span></li>
-            <li><strong>Индексация</strong><span>robots.txt, sitemap.xml, запреты на индексацию и базовые проблемы доступности.</span></li>
+            <li><strong>Разметка и картинки</strong><span>JSON-LD Schema.org, ошибки его разбора, изображения без alt.</span></li>
+            
             <li><strong>Ссылки</strong><span>Внутренние битые ссылки и отделение публичных URL от ссылок админки/редактирования.</span></li>
           </ul>
         </div>
@@ -464,22 +464,57 @@
     <section id="install">
       <div class="wrap">
         <h2>Установка</h2>
+        <p class="lead">Два способа. Первый ничего не требует и всегда свежий, второй нужен,
+          если хотите держать инструмент у себя.</p>
+
+        <div class="card notice" style="margin-bottom:14px">
+          <h3>Способ 1: подключить одним адресом, рекомендуемый</h3>
+          <p>Ставить и качать нечего. Ни Node, ни пакета, ни Chrome. Добавьте в Codex, Cursor
+            или Claude один сервер:</p>
+          <pre><code>{
+  "mcpServers": {
+    "ucoz-seo-audit": { "url": "https://109-172-8-16.sslip.io/seo/mcp" }
+  }
+}</code></pre>
+          <p class="hint">Codex в формате TOML: <code>[mcp_servers.ucoz-seo-audit]</code> и
+            <code>url = "https://109-172-8-16.sslip.io/seo/mcp"</code></p>
+        </div>
+
         <div class="steps">
-          <div class="step"><div><strong>Добавьте SEO MCP в Codex</strong><pre><code>[mcp_servers.ucoz-seo-audit-fix]
-command = "npx"
-args = ["-y", "--package", "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz", "ucoz-seo-audit-mcp"]
-startup_timeout_sec = 60</code></pre></div></div>
-          <div class="step"><div><strong>Подключите официальный uCoz MCP</strong><p class="hint">Если официальный MCP еще не настроен, откройте <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">инструкцию uCoz по подключению MCP</a>.</p><pre><code>[mcp_servers.ucoz]
+          <div class="step">
+            <div>
+              <h3>Способ 2: поставить локально из репозитория</h3>
+              <p>Так вы получаете и те инструменты, которым нужен браузер и файлы на вашей
+                машине. Код берётся из репозитория, поэтому версия всегда текущая.</p>
+<pre><code>git clone https://github.com/linuxsoid/ucoz-seo-audit-fix.git
+cd ucoz-seo-audit-fix
+npm install --omit=dev</code></pre>
+<pre><code>[mcp_servers.ucoz-seo-audit]
+command = "node"
+args = ["/путь/к/ucoz-seo-audit-fix/src/mcp-server.mjs"]</code></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Официальный uCoz MCP, если нужны автоматические правки</h3>
+              <p>Отдельный продукт платформы uCoz. Для самой проверки он не нужен, подключайте
+                его только чтобы агент мог открыть шаблоны и внести правки.
+                <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Инструкция uCoz</a>.</p>
+<pre><code>[mcp_servers.ucoz]
 command = "npx"
 args = ["-y", "ucoz-mcp@latest"]
 
 [mcp_servers.ucoz.env]
 UCOZ_API_TOKEN = "sk_live_..."
-UCOZ_SITE_URL = "https://your-site.ucoz.net/"
-UCOZ_FTP_HOST = "your-site.ucoz.net"
-UCOZ_FTP_USER = "..."
-UCOZ_FTP_PASS = "..."</code></pre></div></div>
-          <div class="step"><div><strong>Перезапустите MCP в клиенте</strong><pre><code>После сохранения конфига Codex/Cursor/Claude сам скачает пакет и запустит MCP.</code></pre></div></div>
+UCOZ_SITE_URL = "https://ваш-сайт.ucoz.net/"</code></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Перезапустите клиент</h3>
+              <p>После сохранения конфига Codex, Cursor или Claude подхватит сервер сам.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -522,7 +557,7 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
           <tbody>
             <tr><td>Safe auto-fix</td><td>Детерминированные вставки вроде viewport, базовых OG/Twitter meta при надежном источнике данных.</td><td>Можно готовить автоматически, но с diff и повторной проверкой.</td></tr>
             <tr><td>Approve required</td><td>Canonical, редиректы, Schema.org, исправление ссылок и изменения шаблонов с влиянием на несколько страниц.</td><td>Сначала backup и preview, затем явное подтверждение человека.</td></tr>
-            <tr><td>Manual only</td><td>Переписывание контента, коммерческие обещания, сложный backlink-анализ, субъективные рекомендации.</td><td>Отчет объясняет проблему, но не меняет сайт сам.</td></tr>
+            <tr><td>Manual only</td><td>Переписывание контента, коммерческие обещания, субъективные рекомендации по смыслу текста.</td><td>Отчет объясняет проблему, но не меняет сайт сам.</td></tr>
           </tbody>
         </table>
         <article class="card notice" style="margin-top:14px">
@@ -655,10 +690,10 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
       var files = data.reports || {};
       var download = Object.keys(files).length
         ? '<div class="check-msg" style="margin-top:14px"><b>Скачать отчёт</b>' +
-          '<p class="check-note" style="margin:6px 0 10px">Для человека это обычный текстовый ' +
-          'отчёт. Для агента тот же аудит, но короче и с машинными кодами проблем: файл можно ' +
-          'отдать своему ИИ в Codex, Cursor или Claude вместе с подключённым uCoz MCP, и он ' +
-          'внесёт правки.</p>' +
+          '<p class="check-note" style="margin:6px 0 10px">HTML открывается двойным щелчком, ' +
+          'markdown удобно вставить в переписку. Версия для ИИ это тот же аудит, но короче и с ' +
+          'машинными кодами проблем: файл можно отдать своему агенту, и вместе с подключённым ' +
+          'uCoz MCP он внесёт правки.</p>' +
           '<div class="dl-row">' +
             dlBtn('human-ru', 'Для человека, MD') +
             dlBtn('html', 'Для человека, HTML') +
