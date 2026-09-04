@@ -22,29 +22,20 @@ child.stdout.on('data', (chunk) => {
 
 function request(method, params = {}) {
   const message = { jsonrpc: '2.0', id: id++, method, params };
-  const body = JSON.stringify(message);
-  child.stdin.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
+  child.stdin.write(`${JSON.stringify(message)}\n`);
   return new Promise((resolve) => pending.set(message.id, resolve));
 }
 
 function notify(method, params = {}) {
-  const body = JSON.stringify({ jsonrpc: '2.0', method, params });
-  child.stdin.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
+  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
 }
 
 function readMessage() {
-  const headerEnd = buffer.indexOf('\r\n\r\n');
-  if (headerEnd === -1) return null;
-  const header = buffer.slice(0, headerEnd).toString('utf8');
-  const match = header.match(/content-length:\s*(\d+)/i);
-  if (!match) throw new Error(`Bad header: ${header}`);
-  const length = Number(match[1]);
-  const start = headerEnd + 4;
-  const end = start + length;
-  if (buffer.length < end) return null;
-  const body = buffer.slice(start, end).toString('utf8');
-  buffer = buffer.slice(end);
-  return JSON.parse(body);
+  const newlineEnd = buffer.indexOf('\n');
+  if (newlineEnd === -1) return null;
+  const line = buffer.slice(0, newlineEnd).toString('utf8').trim();
+  buffer = buffer.slice(newlineEnd + 1);
+  return line ? JSON.parse(line) : null;
 }
 
 const init = await request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'smoke', version: '0.1.0' } });

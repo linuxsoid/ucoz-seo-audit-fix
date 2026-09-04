@@ -5,10 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>uCoz SEO Audit & Fix MCP</title>
   <meta name="description" content="Публичный MCP-сервер для SEO-аудита uCoz: отчеты, группировка по страницам и шаблонам, безопасный план исправлений.">
+  <link rel="canonical" href="https://seoaudit.ucoz.net/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="uCoz SEO Audit & Fix MCP">
   <meta property="og:description" content="SEO-аудит и safe-fix workflow для uCoz через MCP.">
+  <meta property="og:url" content="https://seoaudit.ucoz.net/">
   <meta name="twitter:card" content="summary">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "uCoz SEO Audit & Fix MCP",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "description": "MCP-сервер для SEO-аудита сайтов uCoz, Lighthouse-проверок, отчетов и safe-fix workflow.",
+    "url": "https://seoaudit.ucoz.net/",
+    "downloadUrl": "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz"
+  }
+  </script>
   <style>
     :root {
       color-scheme: light;
@@ -86,6 +100,7 @@
       overflow: hidden;
     }
     .report-top { display: flex; justify-content: space-between; gap: 12px; color: #9ca9ba; font-size: 13px; border-bottom: 1px solid #2c3646; padding-bottom: 12px; }
+    .report-top a { color: #dbeafe; font-weight: 700; }
     .score { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
     .score div { background: #1f2937; border-radius: 8px; padding: 12px; }
     .score b { display: block; font-size: 26px; color: #fff; }
@@ -195,11 +210,11 @@
         </div>
       </div>
       <div class="report" aria-label="Пример отчета">
-        <div class="report-top"><span>seo-report.html</span><span>20 страниц</span></div>
+        <div class="report-top"><a href="/seo-mcp/seo-report.html">seo-report.html</a><span>1 страница</span></div>
         <div class="score">
-          <div><b>5</b>критичных</div>
-          <div><b>58</b>рекомендаций</div>
-          <div><b>64</b>проверки OK</div>
+          <div><b>8</b>критичных</div>
+          <div><b>5</b>рекомендаций</div>
+          <div><b>9</b>проверок OK</div>
         </div>
         <div class="row"><span class="tag red">Страница</span><span>Замечания сгруппированы по публичному URL</span></div>
         <div class="row"><span class="tag">Шаблон</span><span>Показывается название шаблона и module_id/template_id</span></div>
