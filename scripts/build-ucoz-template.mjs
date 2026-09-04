@@ -25,21 +25,25 @@ const SOURCE = join(ROOT, 'site', 'index.html');
 const TARGET = join(ROOT, 'site', 'homepage-own-template.html');
 
 /**
- * Куда вставить подпись uCoz. Опираемся на текст подвала, а не на номер строки: номера
- * съезжают от любой правки выше, и сборка молча начала бы класть подпись не туда.
+ * Куда вставить подпись uCoz. В подвале index.html стоит метка-комментарий: она ничего не
+ * показывает человеку, но точно указывает место. Раньше якорем был текст подвала, и первая
+ * же правка формулировки (убрали личную почту) сломала бы сборку.
  */
-const ANCHOR = '<span style="display:inline-block;margin-left:10px">Связь:';
-const POWERED = '<span style="display:inline-block;margin-left:10px">$POWERED_BY$</span> ';
+const ANCHOR = '<!--POWERED-->';
+const POWERED = '<span style="display:inline-block;margin-left:10px">$POWERED_BY$</span>';
 
 function build(html) {
   if (html.includes('$POWERED_BY$')) {
     throw new Error('в site/index.html не должно быть $POWERED_BY$: это метка шаблона uCoz');
   }
-  const at = html.indexOf(ANCHOR);
-  if (at === -1) {
-    throw new Error(`в подвале site/index.html не найден якорь «${ANCHOR}»: поправьте ANCHOR в этом скрипте`);
+  if (!html.includes(ANCHOR)) {
+    throw new Error(`в подвале site/index.html не найдена метка ${ANCHOR}: без неё подпись uCoz вставить некуда`);
   }
-  return html.slice(0, at) + POWERED + html.slice(at);
+  if (html.split(ANCHOR).length !== 2) {
+    throw new Error(`метка ${ANCHOR} в site/index.html встречается больше одного раза`);
+  }
+  const at = html.indexOf(ANCHOR);
+  return html.slice(0, at) + POWERED + html.slice(at + ANCHOR.length);
 }
 
 const source = await readFile(SOURCE, 'utf8');

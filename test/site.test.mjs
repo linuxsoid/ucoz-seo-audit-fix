@@ -112,3 +112,19 @@ test('поле ввода адреса стоит на первом экране
   assert.ok(input > hero && input < secondSection,
     'поле ввода должно быть внутри первого экрана, а не отдельной секцией ниже сгиба');
 });
+
+test('в подвале нет личной почты, а есть форма поддержки', async () => {
+  // На живом сайте в подвале стояла личная рабочая почта одного из авторов, и заметил это
+  // не автор, а тимейт. Личный адрес на публичной странице собирает спам и уводит вопросы
+  // из поддержки в личку, поэтому тут закреплено: только форма поддержки uCoz.
+  for (const page of PAGES) {
+    const html = await readFile(join(ROOT, page), 'utf8');
+    const footer = html.slice(html.indexOf('<footer'));
+
+    assert.equal(/mailto:/i.test(footer), false, `${page}: в подвале снова появилась почта`);
+    assert.ok(footer.includes('https://www.ucoz.ru/contact/'), `${page}: нет ссылки на форму поддержки uCoz`);
+    for (const name of ['Андрей Игинов', 'Юрий Герук', 'Владислав Гевел']) {
+      assert.ok(footer.includes(name), `${page}: в подвале не указан ${name}`);
+    }
+  }
+});
