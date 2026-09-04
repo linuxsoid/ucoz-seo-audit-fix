@@ -8,7 +8,6 @@
     "src",
     "scripts",
     "README.md",
-    "README-install.md",
     "app.js"
   ],
   "bin": {
