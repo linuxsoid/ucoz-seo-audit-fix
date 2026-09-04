@@ -717,25 +717,9 @@ npm install --omit=dev</code></pre>
           '<div id="rest-issues" hidden style="margin-top:10px">' + issuesHtml + '</div></div>'
         : issuesHtml;
 
-      // Блок скачивания на этом шаге НЕ показываем. Проверка ещё не закончена: впереди
-      // браузерная часть, и файлы, собранные сейчас, не содержали бы Lighthouse. Раньше
-      // так и было, и скачанный отчёт молча терял половину данных.
-      var files = {};
-      var download = Object.keys(files).length
-        ? '<div class="check-msg" style="margin-top:14px"><b>Скачать отчёт</b>' +
-          '<p class="check-note" style="margin:6px 0 10px">HTML открывается двойным щелчком, ' +
-          'markdown удобно вставить в переписку. Версия для ИИ это тот же аудит, но короче и с ' +
-          'машинными кодами проблем: файл можно отдать своему агенту, и вместе с подключённым ' +
-          'uCoz MCP он внесёт правки.</p>' +
-          '<div class="dl-row">' +
-            dlBtn('human-ru', 'Для человека, MD') +
-            dlBtn('html', 'Для человека, HTML') +
-            dlBtn('agent-ru', 'Для ИИ, RU') +
-            dlBtn('agent-en', 'Для ИИ, EN') +
-            dlBtn('har', 'HAR') +
-        dlBtn('json', 'JSON') +
-          '</div></div>'
-        : '';
+      // Блок скачивания появляется не здесь, а в showDownloads, когда закончится
+      // и браузерная часть. Иначе файлы не содержали бы Lighthouse.
+      var download = '';
 
       var deep =
         '<div class="check-msg" style="margin-top:14px" id="check-deep-box">' +
@@ -865,6 +849,7 @@ npm install --omit=dev</code></pre>
         dlBtn('html', 'Для человека, HTML') +
         dlBtn('agent-ru', 'Для ИИ, RU') +
         dlBtn('agent-en', 'Для ИИ, EN') +
+        dlBtn('har', 'HAR') +
         dlBtn('json', 'JSON') +
       '</div></div>';
 
