@@ -20,6 +20,8 @@
  *   Network.*                  все запросы: метод, статус, тип, размер, длительность
  */
 
+import { withBrowserSlot } from './browser-slot.mjs';
+
 const CONSOLE_LIMIT = 200;
 const NETWORK_LIMIT = 500;
 
@@ -28,6 +30,16 @@ const NETWORK_LIMIT = 500;
  * @param {{waitMs?: number, formFactor?: 'mobile'|'desktop', chromePath?: string}} options
  */
 export async function collectBrowserDiagnostics(url, options = {}) {
+  // Браузер запускается только через очередь: параллельные прогоны душат друг друга
+  // по процессору и складывают память. Подробности в browser-slot.mjs.
+  try {
+    return await withBrowserSlot(() => runDiagnostics(url, options));
+  } catch (error) {
+    return unavailable(normalizeUrl(url), String(error?.message ?? error));
+  }
+}
+
+async function runDiagnostics(url, options) {
   const target = normalizeUrl(url);
   const waitMs = clamp(Number(options.waitMs ?? 5000), 0, 20000);
 

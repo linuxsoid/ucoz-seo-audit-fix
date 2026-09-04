@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { withBrowserSlot } from './browser-slot.mjs';
 import { join, resolve } from 'node:path';
 
 const CATEGORY_LABELS = {
@@ -109,6 +110,16 @@ const AUDIT_FIXES = {
 };
 
 export async function runLighthouseAudit(url, options = {}) {
+  // Тот же слот, что и у браузерной диагностики: Chrome поднимают оба, и делить
+  // машину они должны по одной общей очереди, а не по двум независимым.
+  try {
+    return await withBrowserSlot(() => runLighthouseInternal(url, options));
+  } catch (error) {
+    return unavailableResult(normalizeTargetUrl(url), String(error?.message ?? error));
+  }
+}
+
+async function runLighthouseInternal(url, options = {}) {
   const targetUrl = normalizeTargetUrl(url);
   const categories = normalizeCategories(options.categories);
   const formFactor = options.formFactor === 'desktop' ? 'desktop' : 'mobile';

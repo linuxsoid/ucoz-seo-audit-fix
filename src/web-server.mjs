@@ -50,6 +50,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { auditSite } from './seo-audit.mjs';
 import { handleMcpRequest } from './mcp-http.mjs';
+import { browserSlotStats } from './browser-slot.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -86,7 +87,7 @@ const server = createServer(async (req, res) => {
     const route = matchRoute(url.pathname);
 
     if (req.method === 'GET' && route === 'healthz') {
-      return sendJson(res, 200, { ok: true, running, maxPages: MAX_PAGES });
+      return sendJson(res, 200, { ok: true, running, maxPages: MAX_PAGES, browser: browserSlotStats() });
     }
     if (req.method === 'OPTIONS' && route === 'audit') {
       // Форму можно встроить на лендинг seoaudit.ucoz.net, а он живёт на другом origin,
