@@ -35,6 +35,9 @@
  *                    только с перечисленных адресов
  *   MCP_HOSTED       1 для нашего хостинга: убирает из списка тулы, которым нужен
  *                    локальный Chrome или запись в локальную файловую систему
+ *   MCP_ALLOW_LIGHTHOUSE  1 возвращает run_lighthouse_audit в удалённом режиме. Ставить
+ *                    только там, где на сервере реально есть Chrome, иначе тул будет
+ *                    падать у каждого пользователя
  *   PORT, HOST       только при самостоятельном запуске этого файла
  */
 
@@ -58,6 +61,11 @@ const MAX_BODY = 1024 * 1024;
  *                         пользователя нет, править надо через официальный ucoz-mcp.
  */
 const HOSTED_BLOCKLIST = new Set(['run_lighthouse_audit', 'fix_template_file']);
+
+// На хостинге с установленным Chrome (например на своём VPS) Lighthouse работать может,
+// и прятать его там незачем. Запись в локальные файлы остаётся закрытой всегда: файловая
+// система сервера пользователю не принадлежит.
+if (process.env.MCP_ALLOW_LIGHTHOUSE === '1') HOSTED_BLOCKLIST.delete('run_lighthouse_audit');
 
 export const publicTools = HOSTED ? tools.filter((tool) => !HOSTED_BLOCKLIST.has(tool.name)) : tools;
 
