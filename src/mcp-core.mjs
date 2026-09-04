@@ -41,7 +41,7 @@ export const tools = [
           description: 'Категории Lighthouse. По умолчанию: performance, accessibility, best-practices, seo.',
           items: { type: 'string', enum: ['performance', 'accessibility', 'best-practices', 'seo', 'pwa'] }
         },
-        format: { type: 'string', enum: ['all', 'json', 'markdown', 'html'], description: 'Формат отчёта. По умолчанию: all.' }
+        format: { type: 'string', enum: ['all', 'json', 'markdown', 'html'], description: 'Формат отчёта. По умолчанию: markdown. HTML запрашивайте явно: он весит в разы больше и в переписке с моделью бесполезен.' }
       },
       required: ['url']
     }
@@ -186,7 +186,10 @@ async function deliverReports(result, format) {
   if (!REMOTE_MODE) {
     return { reportFiles: await writeReports(result, { format: format ?? 'all' }) };
   }
-  const wanted = format ?? 'all';
+  // По умолчанию отдаём только markdown. HTML это те же выводы, обёрнутые в разметку
+  // страницы: сорок с лишним килобайт, которые в контексте модели ничего не добавляют,
+  // а место занимают. Кому нужен HTML, тот попросит его явно.
+  const wanted = format ?? 'markdown';
   const out = {};
   if (wanted === 'all' || wanted === 'markdown') out.markdown = toMarkdown(result);
   if (wanted === 'all' || wanted === 'html') out.html = toHtml(result);
