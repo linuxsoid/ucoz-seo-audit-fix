@@ -21,7 +21,8 @@
     "smoke": "node ./src/cli.mjs audit https://api.ucoz.net/ --max-pages 3 --format markdown",
     "smoke:mcp": "node ./scripts/mcp-smoke.mjs",
     "audit:mcp": "node ./scripts/mcp-audit-site.mjs",
-    "web": "node ./src/web-server.mjs"
+    "web": "node ./src/web-server.mjs",
+    "mcp:http": "node ./src/mcp-http.mjs"
   },
   "engines": {
     "node": ">=20"

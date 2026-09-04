@@ -45,6 +45,7 @@ import { createServer } from 'node:http';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { auditSite } from './seo-audit.mjs';
+import { handleMcpRequest } from './mcp-http.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -85,6 +86,11 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/audit') {
       return await handleAudit(req, res);
+    }
+    // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
+    // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
+    if (url.pathname === '/mcp') {
+      return await handleMcpRequest(req, res);
     }
 
     return sendJson(res, 404, { error: 'Не найдено' });
@@ -506,5 +512,6 @@ function escapeHtml(value) {
 server.listen(PORT, HOST, () => {
   console.log(`SEO web checker слушает http://${HOST}:${PORT}`);
   console.log(`страниц за проверку: ${MAX_PAGES}, лимит: ${RATE_LIMIT} за ${RATE_WINDOW_MS / 60000} мин, параллельно: ${MAX_CONCURRENT}`);
+  console.log(`remote MCP: http://${HOST}:${PORT}/mcp`);
   if (ALLOW_PRIVATE) console.warn('ВНИМАНИЕ: ALLOW_PRIVATE=1, защита от приватных адресов выключена. Только для локальной отладки.');
 });

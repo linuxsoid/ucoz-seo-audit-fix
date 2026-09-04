@@ -30,7 +30,7 @@ export async function writeReports(result, options = {}) {
   return files;
 }
 
-function toMarkdown(result) {
+export function toMarkdown(result) {
   const issues = result.checks.filter((check) => check.severity !== 'pass');
   const contentIssues = issues.filter((check) => !String(check.code).startsWith('lighthouse.'));
   const pageGroups = groupIssuesByPage(result, contentIssues);
@@ -77,7 +77,7 @@ ${formatSkippedUrls(result.skippedUrls ?? [])}
 `;
 }
 
-function toHtml(result) {
+export function toHtml(result) {
   const issues = result.checks.filter((check) => check.severity !== 'pass');
   const contentIssues = issues.filter((check) => !String(check.code).startsWith('lighthouse.'));
   const pageGroups = groupIssuesByPage(result, contentIssues);
