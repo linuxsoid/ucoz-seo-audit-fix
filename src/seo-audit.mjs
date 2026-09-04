@@ -10,7 +10,7 @@ export async function auditSite(startUrl, options = {}) {
   const skippedUrls = [];
   const pages = [];
 
-  const siteChecks = await auditSiteFiles(origin);
+  const siteChecks = [...(await auditSiteFiles(origin)), ...(await auditTls(origin))];
 
   while (queue.length && pages.length < maxPages) {
     const url = queue.shift();
@@ -46,6 +46,7 @@ export async function auditSite(startUrl, options = {}) {
 
   const duplicateChecks = findDuplicates(pages);
   const brokenLinkChecks = await auditInternalLinks(pages);
+  const siteWideChecks = auditSiteWide(pages, origin);
   const lighthouse = options.lighthouse ? await runLighthouseAudit(startUrl, {
     categories: options.lighthouseCategories,
     formFactor: options.lighthouseFormFactor,
@@ -57,6 +58,7 @@ export async function auditSite(startUrl, options = {}) {
     ...pages.flatMap((page) => page.checks ?? []),
     ...duplicateChecks,
     ...brokenLinkChecks,
+    ...siteWideChecks,
     ...lighthouseChecksFromResult(lighthouse)
   ];
 
@@ -133,6 +135,11 @@ async function fetchPage(url) {
       contentType,
       bytes: html.length,
       ms: Date.now() - started,
+      // Запрет индексации может стоять не только в мета-теге, но и в заголовке ответа
+      // X-Robots-Tag. Второй вариант коварнее: в исходнике страницы его не видно.
+      xRobotsTag: response.headers.get('x-robots-tag') ?? '',
+      // Конечный адрес после всех перенаправлений. Нужен, чтобы поймать цепочки.
+      finalUrl: response.url || url,
       html
     };
   } catch (error) {
@@ -195,6 +202,58 @@ function auditHtml(page, links) {
   const canonical = getLinkRel(html, 'canonical');
   const lang = getHtmlLang(html);
   const jsonLd = getJsonLdBlocks(html);
+  const robotsMeta = getMeta(html, 'name', 'robots');
+
+  // --- Индексируемость страницы ---
+  // Самая дорогая ошибка в SEO: страница сделана хорошо, но закрыта от поиска.
+  // Проверяем оба места, где может стоять запрет: мета-тег и заголовок ответа.
+  const noindexSources = [];
+  if (/noindex/i.test(robotsMeta || '')) noindexSources.push('мета-тег robots');
+  if (/noindex/i.test(page.xRobotsTag || '')) noindexSources.push('заголовок X-Robots-Tag');
+  if (noindexSources.length) {
+    checks.push(issue('critical', 'index.noindex', page.url,
+      `Страница закрыта от индексации (${noindexSources.join(' и ')}).`,
+      'Уберите noindex, если страница должна быть в поиске.'));
+  } else {
+    checks.push(pass('index.indexable', page.url, 'Страница открыта для индексации.'));
+  }
+
+  // --- Цепочка редиректов ---
+  // Каждое лишнее перенаправление теряет часть ссылочного веса и замедляет загрузку.
+  if (page.finalUrl && normalizeForCompare(page.finalUrl) !== normalizeForCompare(page.url)) {
+    checks.push(issue('recommended', 'links.redirected', page.url,
+      `Адрес перенаправляет на ${page.finalUrl}`,
+      'Ставьте в меню и ссылках сразу конечный адрес, чтобы не терять вес на перенаправлениях.'));
+  }
+
+  // --- Иерархия заголовков ---
+  // Пропуск уровня (H2 сразу на H4) ломает структуру документа и мешает поиску
+  // понять, что на странице главное.
+  const headingSkips = findHeadingSkips(html);
+  if (headingSkips.length) {
+    checks.push(issue('recommended', 'content.heading_order', page.url,
+      `Нарушена иерархия заголовков: ${headingSkips.slice(0, 3).join(', ')}.`,
+      'Уровни должны идти по порядку, без пропусков: за H2 идёт H3, а не H4.'));
+  }
+  if (h1s.length > 1) {
+    checks.push(issue('recommended', 'content.h1_multiple', page.url,
+      `На странице ${h1s.length} заголовков H1.`,
+      'Оставьте один H1: он должен отвечать, о чём именно эта страница.'));
+  }
+
+  // --- Хлебные крошки ---
+  // Разметка BreadcrumbList выводит путь по сайту прямо в выдачу и помогает
+  // поиску понять структуру. Проверяем только на внутренних страницах: на главной
+  // крошки не нужны.
+  if (!isHomePage(page.url)) {
+    if (/BreadcrumbList/i.test(html)) {
+      checks.push(pass('schema.breadcrumbs_ok', page.url, 'Есть разметка хлебных крошек.'));
+    } else {
+      checks.push(issue('recommended', 'schema.breadcrumbs_missing', page.url,
+        'Нет разметки хлебных крошек BreadcrumbList.',
+        'Добавьте крошки со Schema-разметкой: они показываются в выдаче и помогают навигации.'));
+    }
+  }
 
   if (!page.ok) checks.push(issue('critical', 'page.bad_status', page.url, `Страница возвращает HTTP ${page.status}.`, 'Исправьте ответ сервера или цепочку редиректов.'));
   else checks.push(pass('page.ok', page.url, `Страница возвращает HTTP ${page.status}.`));
@@ -345,6 +404,195 @@ function summarize(checks) {
     recommended: checks.filter((check) => check.severity === 'recommended').length,
     passed: checks.filter((check) => check.severity === 'pass').length
   };
+}
+
+/**
+ * Проверка сертификата: жив ли HTTPS и сколько ему осталось.
+ *
+ * У владельцев сайтов на конструкторах это регулярная боль: сертификат тихо истекает,
+ * браузер начинает пугать посетителя предупреждением, и трафик падает раньше, чем
+ * человек узнаёт о проблеме.
+ *
+ * Срок действия берём из TLS-рукопожатия напрямую: HTTP-ответ его не содержит.
+ */
+async function auditTls(origin) {
+  const checks = [];
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return checks;
+  }
+
+  if (parsed.protocol !== 'https:') {
+    checks.push(issue('critical', 'tls.no_https', origin,
+      'Сайт работает без HTTPS.',
+      'Подключите SSL-сертификат: без него браузеры помечают сайт как небезопасный, а поиск понижает его.'));
+    return checks;
+  }
+
+  try {
+    const tls = await import('node:tls');
+    const cert = await new Promise((resolve, reject) => {
+      const socket = tls.connect(
+        { host: parsed.hostname, port: 443, servername: parsed.hostname, timeout: 8000 },
+        () => {
+          const peer = socket.getPeerCertificate();
+          const authorized = socket.authorized;
+          socket.end();
+          resolve({ peer, authorized });
+        }
+      );
+      socket.on('error', reject);
+      socket.on('timeout', () => { socket.destroy(); reject(new Error('таймаут')); });
+    });
+
+    if (!cert.authorized) {
+      checks.push(issue('critical', 'tls.not_trusted', origin,
+        'Сертификат не проходит проверку доверия.',
+        'Браузер покажет посетителю предупреждение. Перевыпустите сертификат.'));
+      return checks;
+    }
+
+    const validTo = cert.peer?.valid_to ? new Date(cert.peer.valid_to) : null;
+    if (validTo && !Number.isNaN(validTo.getTime())) {
+      const daysLeft = Math.round((validTo - Date.now()) / 86400000);
+      if (daysLeft < 0) {
+        checks.push(issue('critical', 'tls.expired', origin,
+          'Срок действия сертификата истёк.',
+          'Перевыпустите сертификат немедленно: сайт открывается с предупреждением.'));
+      } else if (daysLeft <= 14) {
+        checks.push(issue('critical', 'tls.expiring', origin,
+          `Сертификат истекает через ${daysLeft} дн.`,
+          'Продлите сертификат до окончания срока, иначе сайт начнёт пугать посетителей.'));
+      } else {
+        checks.push(pass('tls.ok', origin, `HTTPS работает, сертификат действует ещё ${daysLeft} дн.`));
+      }
+    }
+  } catch (error) {
+    checks.push(issue('recommended', 'tls.check_failed', origin,
+      `Не удалось проверить сертификат: ${error.message}`,
+      'Проверьте вручную, открывается ли сайт по HTTPS без предупреждений.'));
+  }
+
+  return checks;
+}
+
+/**
+ * Проверки, которые имеют смысл только по сайту целиком, а не по одной странице.
+ *
+ * Контакты и счётчик аналитики достаточно найти хоть где-то: телефон обычно в шапке
+ * или в подвале, а счётчик в общем шаблоне. Требовать их на каждой странице
+ * бессмысленно и породило бы поток одинаковых замечаний.
+ */
+function auditSiteWide(pages, origin) {
+  const checks = [];
+  const htmlPages = pages.filter((page) => page.html);
+  if (!htmlPages.length) return checks;
+
+  const allHtml = htmlPages.map((page) => page.html).join('\n');
+
+  // --- Контакты ---
+  // Коммерческий фактор доверия: сайт без единого способа связи и поиск ранжирует
+  // хуже, и посетитель закрывает.
+  const hasPhone = /(?:href=["']tel:)|(?:\+7[\s(-]?\d{3}[\s)-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/i.test(allHtml);
+  const hasEmail = /href=["']mailto:/i.test(allHtml);
+  const hasMessenger = /(?:wa\.me|t\.me|api\.whatsapp\.com|viber:)/i.test(allHtml);
+  if (hasPhone || hasEmail || hasMessenger) {
+    const found = [hasPhone && 'телефон', hasEmail && 'почта', hasMessenger && 'мессенджер']
+      .filter(Boolean).join(', ');
+    checks.push(pass('trust.contacts_ok', origin, `Контакты на сайте есть: ${found}.`));
+  } else {
+    checks.push(issue('recommended', 'trust.contacts_missing', origin,
+      'На проверенных страницах не нашлось ни телефона, ни почты, ни мессенджера.',
+      'Добавьте способ связи в шапку или подвал: без него падает и доверие посетителя, и позиции коммерческого сайта.'));
+  }
+
+  // --- Счётчик аналитики ---
+  // Без счётчика владелец не видит ни трафика, ни поведения, и любые SEO-правки
+  // делаются вслепую: нечем измерить, стало лучше или хуже.
+  const counters = [];
+  if (/mc\.yandex\.ru|ym\(\s*\d+/i.test(allHtml)) counters.push('Яндекс.Метрика');
+  if (/googletagmanager\.com|gtag\(|google-analytics\.com/i.test(allHtml)) counters.push('Google Analytics');
+  if (counters.length) {
+    checks.push(pass('analytics.counter_ok', origin, `Счётчик установлен: ${counters.join(', ')}.`));
+  } else {
+    checks.push(issue('recommended', 'analytics.counter_missing', origin,
+      'Счётчик аналитики не найден.',
+      'Поставьте Яндекс.Метрику или Google Analytics: без них не видно, приносят ли правки результат.'));
+  }
+
+  // --- Осиротевшие страницы ---
+  // Страница, на которую не ведёт ни одна внутренняя ссылка, для поиска почти не
+  // существует: до неё не доходит ни краулер, ни вес остальных страниц.
+  const linkedTo = new Set();
+  for (const page of htmlPages) {
+    for (const link of page.links ?? []) {
+      if (link.internal) linkedTo.add(normalizeForCompare(link.href));
+    }
+  }
+  const orphans = htmlPages
+    .map((page) => page.url)
+    .filter((url) => !isHomePage(url) && !linkedTo.has(normalizeForCompare(url)));
+  if (orphans.length) {
+    checks.push(issue('recommended', 'links.orphan_pages', orphans[0],
+      `Найдены страницы без внутренних ссылок: ${orphans.length}.`,
+      'Сошлитесь на них из меню или из текста других страниц, иначе поиск их почти не видит.',
+      { pages: orphans.slice(0, 10) }));
+  }
+
+  // --- Глубина вложенности ---
+  // Чем глубже страница, тем меньше веса до неё доходит. Три клика от главной это
+  // общепринятый ориентир.
+  const deep = htmlPages
+    .map((page) => ({ url: page.url, depth: pathDepth(page.url) }))
+    .filter((item) => item.depth > 3);
+  if (deep.length) {
+    checks.push(issue('recommended', 'links.deep_pages', deep[0].url,
+      `Страниц глубже третьего уровня: ${deep.length}.`,
+      'Сократите путь до важных страниц: ориентир это не больше трёх кликов от главной.',
+      { pages: deep.slice(0, 10).map((item) => item.url) }));
+  }
+
+  return checks;
+}
+
+/** Пропуски уровней заголовков в порядке появления, например «H2 сразу на H4». */
+function findHeadingSkips(html) {
+  const levels = [...String(html).matchAll(/<h([1-6])\b/gi)].map((m) => Number(m[1]));
+  const skips = [];
+  for (let i = 1; i < levels.length; i += 1) {
+    if (levels[i] - levels[i - 1] > 1) skips.push(`H${levels[i - 1]} сразу на H${levels[i]}`);
+  }
+  return [...new Set(skips)];
+}
+
+function isHomePage(url) {
+  try {
+    const path = new URL(url).pathname.replace(/\/+$/, '');
+    return path === '' || path === '/index.html';
+  } catch {
+    return false;
+  }
+}
+
+function pathDepth(url) {
+  try {
+    return new URL(url).pathname.split('/').filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Сравниваем адреса без хвостового слэша и без якоря, иначе одна страница двоится. */
+function normalizeForCompare(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return (parsed.origin + parsed.pathname.replace(/\/+$/, '') + parsed.search).toLowerCase();
+  } catch {
+    return String(url).toLowerCase();
+  }
 }
 
 function issue(severity, code, url, message, fix, extra = {}) {
