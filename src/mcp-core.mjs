@@ -245,10 +245,29 @@ function trimLighthouse(lighthouse) {
   };
 }
 
-/** У браузерной части оставляем разбор, а сырую запись сети и скриншот выбрасываем. */
+/**
+ * У браузерной части оставляем разбор и список запросов, а сырую запись сети и скриншот
+ * выбрасываем.
+ *
+ * Полный HAR это те же запросы плюс заголовки, тайминги и служебные поля формата: сорок
+ * семь килобайт против пятнадцати. Список запросов при этом обещан в описании тула, и
+ * выкинуть его вместе с HAR значило бы соврать про то, что тул возвращает.
+ */
 function trimBrowser(browser) {
   const { har, screenshotBase64, consoleLog, ...rest } = browser;
-  return rest;
+  const entries = har?.log?.entries ?? [];
+  return {
+    ...rest,
+    requests: entries.map((e) => ({
+      url: e.request?.url,
+      method: e.request?.method,
+      status: e.response?.status,
+      type: e._resourceType,
+      kb: Math.round((e.response?.content?.size ?? 0) / 1024),
+      ms: e.time,
+      fromCache: e._fromCache
+    }))
+  };
 }
 
 export async function callTool(name, args) {
