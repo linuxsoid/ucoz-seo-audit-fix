@@ -60,12 +60,15 @@ const MAX_BODY = 1024 * 1024;
  *   fix_template_file     пишет в локальный файл. На нашем сервере локальных файлов
  *                         пользователя нет, править надо через официальный ucoz-mcp.
  */
-const HOSTED_BLOCKLIST = new Set(['run_lighthouse_audit', 'fix_template_file']);
+const HOSTED_BLOCKLIST = new Set(['run_lighthouse_audit', 'collect_browser_diagnostics', 'fix_template_file']);
 
 // На хостинге с установленным Chrome (например на своём VPS) Lighthouse работать может,
 // и прятать его там незачем. Запись в локальные файлы остаётся закрытой всегда: файловая
 // система сервера пользователю не принадлежит.
-if (process.env.MCP_ALLOW_LIGHTHOUSE === '1') HOSTED_BLOCKLIST.delete('run_lighthouse_audit');
+if (process.env.MCP_ALLOW_LIGHTHOUSE === '1') {
+  HOSTED_BLOCKLIST.delete('run_lighthouse_audit');
+  HOSTED_BLOCKLIST.delete('collect_browser_diagnostics');
+}
 
 export const publicTools = HOSTED ? tools.filter((tool) => !HOSTED_BLOCKLIST.has(tool.name)) : tools;
 

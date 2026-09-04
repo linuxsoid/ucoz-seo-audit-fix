@@ -16,6 +16,7 @@ import { runLighthouseAudit } from './lighthouse-audit.mjs';
 import { planSafeFixes } from './safe-fix-plan.mjs';
 import { fixTemplateContent, fixTemplateFile } from './template-fix.mjs';
 import { compareAudits } from './compare-audits.mjs';
+import { collectBrowserDiagnostics } from './browser-probe.mjs';
 
 const serverInfo = {
   name: 'ucoz-seo-audit-fix',
@@ -63,6 +64,19 @@ export const tools = [
           description: 'Какие Lighthouse-файлы сохранить. По умолчанию: json и html.',
           items: { type: 'string', enum: ['json', 'html'] }
         }
+      },
+      required: ['url']
+    }
+  },
+  {
+    name: 'collect_browser_diagnostics',
+    description: 'Открывает страницу в реальном Chrome и возвращает то, за чем обычно лезут в DevTools руками: ошибки и предупреждения консоли, необработанные исключения JavaScript, сообщения браузера про CSP и смешанный контент, все сетевые запросы со статусами, упавшие запросы, самые тяжёлые и самые медленные ресурсы, вес страницы. Lighthouse этого не показывает: он даёт оценки, а не содержимое консоли и сети.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Публичный URL страницы.' },
+        waitMs: { type: 'number', description: 'Сколько ждать после загрузки, чтобы поймать отложенные скрипты и запросы. По умолчанию 5000, максимум 20000.' },
+        formFactor: { type: 'string', enum: ['mobile', 'desktop'], description: 'Профиль экрана. По умолчанию mobile.' }
       },
       required: ['url']
     }
@@ -206,6 +220,13 @@ export async function callTool(name, args) {
       formFactor: args.formFactor ?? 'mobile',
       categories: args.categories,
       output: args.output ?? ['json', 'html']
+    });
+  }
+
+  if (name === 'collect_browser_diagnostics') {
+    return collectBrowserDiagnostics(args.url, {
+      waitMs: args.waitMs,
+      formFactor: args.formFactor
     });
   }
 
