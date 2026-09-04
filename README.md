@@ -57,7 +57,9 @@ npm run audit:mcp -- https://example.ucoz.net 10
 CLI оставлен только для разработки и smoke-test:
 
 ```powershell
-cd "C:\Users\Linux\Documents\Работа\ucoz-seo-audit-fix"
+git clone https://github.com/linuxsoid/ucoz-seo-audit-fix.git
+cd ucoz-seo-audit-fix
+npm install
 node .\src\cli.mjs audit https://example.ucoz.net --max-pages 25
 ```
 
