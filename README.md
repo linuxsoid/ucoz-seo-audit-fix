@@ -163,6 +163,49 @@ MCP_HOSTED=1 npm run web
 Для полного набора, включая Lighthouse и запись в локальные файлы, пакет ставится
 локально по stdio, как описано выше.
 
+## Развёртывание на своём сервере
+
+На серверных скриптах uCoz работает всё, кроме Lighthouse: в том окружении нет браузера.
+Полный набор, включая Lighthouse и Core Web Vitals, поднимается на обычном сервере.
+
+```bash
+# Chrome из репозитория Google, а не chromium из Ubuntu:
+# в 24.04 пакет chromium это обёртка над snap, а snap на сервере лишний
+install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/keyrings/google-chrome.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+apt-get update && apt-get install -y google-chrome-stable
+
+git clone https://github.com/linuxsoid/ucoz-seo-audit-fix.git /opt/ucoz-seo-audit
+cd /opt/ucoz-seo-audit && npm install --omit=dev
+```
+
+Служба systemd, ключевые переменные:
+
+```
+Environment=PORT=8090
+Environment=HOST=127.0.0.1
+Environment=MCP_HOSTED=1
+Environment=MCP_ALLOW_LIGHTHOUSE=1
+Environment=TRUST_PROXY=1
+Environment=CHROME_PATH=/usr/bin/google-chrome-stable
+MemoryMax=1200M
+```
+
+`MemoryMax` не украшение: Lighthouse поднимает Chrome, и на небольшой машине без лимита
+он способен утащить за собой соседние службы.
+
+За nginx приложение вешается так, **без слэша в конце `proxy_pass`**: префикс приложение
+снимает само, а обрезка пути ломает эндпоинт MCP.
+
+```nginx
+location /seo/ {
+    proxy_pass http://127.0.0.1:8090;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 180s;
+}
+```
+
 ## Что проверяет
 
 - доступность страниц и коды ответа;
