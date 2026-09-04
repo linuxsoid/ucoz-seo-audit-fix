@@ -242,14 +242,41 @@ function waitForLoad(cdp, timeoutMs) {
   });
 }
 
-/** Адрес WebSocket отладчика Chrome отдаёт сам по своему HTTP-порту. */
+/**
+ * Адрес WebSocket отладчика нужной вкладки.
+ *
+ * Важная тонкость, на которой легко обжечься: у Chrome два разных вида целей отладки.
+ * /json/version отдаёт адрес БРАУЗЕРА, и в этой сессии доменов Network, Page и Runtime
+ * просто нет, команда Network.enable возвращает "wasn't found". Домены страницы живут
+ * в целях типа page, их список отдаёт /json/list. Берём первую вкладку, а если Chrome
+ * запустился совсем без вкладок, просим создать новую через /json/new.
+ */
 async function debuggerWebSocketUrl(port) {
-  const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
-    signal: AbortSignal.timeout(10000)
-  });
-  const data = await response.json();
-  if (!data.webSocketDebuggerUrl) throw new Error('Chrome не отдал адрес отладчика.');
-  return data.webSocketDebuggerUrl;
+  const base = `http://127.0.0.1:${port}`;
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const targets = await fetchJson(`${base}/json/list`);
+    const page = (Array.isArray(targets) ? targets : []).find(
+      (t) => t.type === 'page' && t.webSocketDebuggerUrl
+    );
+    if (page) return page.webSocketDebuggerUrl;
+    await sleep(300);
+  }
+
+  // Резервный путь: явно создаём пустую вкладку. В новых сборках это PUT, в старых GET.
+  for (const method of ['PUT', 'GET']) {
+    try {
+      const created = await fetchJson(`${base}/json/new?about:blank`, { method });
+      if (created?.webSocketDebuggerUrl) return created.webSocketDebuggerUrl;
+    } catch { /* пробуем следующий метод */ }
+  }
+
+  throw new Error('Chrome не отдал ни одной вкладки для отладки.');
+}
+
+async function fetchJson(url, init = {}) {
+  const response = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
+  return response.json();
 }
 
 /**
