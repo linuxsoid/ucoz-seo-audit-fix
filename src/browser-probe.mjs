@@ -314,10 +314,14 @@ function compactRequest(r) {
 function waitForLoad(cdp, timeoutMs) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
-    cdp.once('Page.loadEventFired', () => {
+    const done = (value) => {
       clearTimeout(timer);
-      resolve(true);
-    });
+      resolve(value);
+    };
+    cdp.once('Page.loadEventFired', () => done(true));
+    // Если Chrome умер, ждать событие бессмысленно: оно уже никогда не придёт, а слот
+    // браузера один на весь сервис и всё это время занят.
+    cdp.onClose(() => done(false));
   });
 }
 
@@ -478,8 +482,29 @@ function connect(wsUrl) {
     });
 
     ws.addEventListener('error', () => reject(new Error('Не удалось подключиться к Chrome по CDP.')));
+
+    /**
+     * Обрыв соединения обрабатываем сразу, а не ждём таймаутов.
+     *
+     * Раньше обработчика close не было. Если Chrome умирал посреди проверки, каждая уже
+     * отправленная команда висела до своего таймаута в тридцать секунд, а ожидание
+     * загрузки страницы висело ещё тридцать. Слот браузера один на весь сервис, поэтому
+     * один упавший Chrome держал проверку недоступной для всех остальных минуты.
+     */
+    let closed = false;
+    const onClose = [];
+    ws.addEventListener('close', () => {
+      closed = true;
+      const dead = new Error('Chrome закрыл соединение до конца проверки.');
+      for (const { reject: fail } of pending.values()) fail(dead);
+      pending.clear();
+      for (const fn of onClose) { try { fn(dead); } catch { /* уборка не важнее причины */ } }
+      onClose.length = 0;
+    });
+
     ws.addEventListener('open', () => resolve({
       send(method, params = {}) {
+        if (closed) return Promise.reject(new Error('Chrome закрыл соединение до конца проверки.'));
         const id = nextId++;
         return new Promise((ok, fail) => {
           pending.set(id, { resolve: ok, reject: fail });
@@ -498,6 +523,12 @@ function connect(wsUrl) {
         if (!handlers.has(key)) handlers.set(key, []);
         handlers.get(key).push(fn);
       },
+      /** Подписка на обрыв. Нужна ожиданиям, чтобы не висеть до таймаута на мёртвом сокете. */
+      onClose(fn) {
+        if (closed) fn(new Error('Chrome закрыл соединение до конца проверки.'));
+        else onClose.push(fn);
+      },
+      get closed() { return closed; },
       close() { try { ws.close(); } catch { /* соединение и так рвётся */ } }
     }));
   });

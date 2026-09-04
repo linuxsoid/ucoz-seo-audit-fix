@@ -160,7 +160,21 @@ async function runLighthouseInternal(url, options = {}) {
       throttlingMethod: 'simulate'
     });
 
-    const reportFiles = persistReports ? await writeLighthouseReports(result, { output }) : [];
+    // Неудачная запись файлов НЕ отменяет уже полученный аудит.
+    //
+    // Раньше запись стояла внутри общего try, и любая её ошибка улетала в catch снаружи:
+    // диск кончился, каталог только для чтения, у процесса нет прав. Минута работы Chrome
+    // выбрасывалась целиком, а человек получал сообщение «Lighthouse не удалось запустить»,
+    // хотя запустился он прекрасно и всё посчитал. Файлы это удобство, а результат уже есть.
+    let reportFiles = [];
+    let reportFilesError = '';
+    if (persistReports) {
+      try {
+        reportFiles = await writeLighthouseReports(result, { output });
+      } catch (error) {
+        reportFilesError = `Отчёт посчитан, но сохранить его файлами не удалось: ${error.message}`;
+      }
+    }
     // Официальный отчёт Lighthouse в исходном виде. Именно его человек открывает руками,
     // и держать его только файлом на нашем диске бессмысленно: в удалённом режиме
     // пользователь до этого диска не доберётся.
@@ -180,6 +194,8 @@ async function runLighthouseInternal(url, options = {}) {
       categories,
       summary,
       reportFiles,
+      // Если файлы сохранить не удалось, говорим об этом, но результат отдаём.
+      reportFilesError,
       rawHtml: rawReports.html ?? null,
       rawJson: rawReports.json ?? null,
       lhr: {

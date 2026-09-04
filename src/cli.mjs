@@ -20,11 +20,24 @@ function help() {
 `);
 }
 
+/**
+ * Значение флага с именем name.
+ *
+ * Флаг без значения раньше превращался в true, и это true уезжало дальше как обычная
+ * строка: команда fix-template --title без текста дописывала в шаблон content="true".
+ * Отсутствие значения это отсутствие значения, а не значение true.
+ */
 function getFlag(name, fallback = null) {
   const index = args.indexOf(name);
   if (index === -1) return fallback;
   const value = args[index + 1];
-  return value && !value.startsWith('--') ? value : true;
+  if (value === undefined || value.startsWith('--')) return fallback;
+  return value;
+}
+
+/** Флаг-переключатель: важно только его наличие. */
+function hasFlag(name) {
+  return args.includes(name);
 }
 
 if (!command || command === '--help' || command === '-h') {

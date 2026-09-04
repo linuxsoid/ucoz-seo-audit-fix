@@ -1,5 +1,12 @@
 export function planSafeFixes(auditResult) {
-  const checks = auditResult.checks ?? [];
+  // Принимаем и сам результат, и ответ audit_site целиком.
+  //
+  // В описании тула написано «полный результат, который вернул audit_site», и агент честно
+  // передаёт весь ответ. А внутри ответа результат лежит под ключом auditResult, поэтому
+  // checks на верхнем уровне не находились, и план получался пустым: тул отвечал
+  // «исправлять нечего» на сайте с пятнадцатью проблемами. Молча и без ошибки.
+  const source = auditResult?.checks ? auditResult : (auditResult?.auditResult ?? auditResult ?? {});
+  const checks = source.checks ?? [];
   const actions = [];
 
   for (const check of checks) {
@@ -17,8 +24,8 @@ export function planSafeFixes(auditResult) {
   }
 
   return {
-    site: auditResult.startUrl,
-    scannedAt: auditResult.scannedAt,
+    site: source.startUrl,
+    scannedAt: source.scannedAt,
     summary: {
       safeAutoFix: actions.filter((action) => action.mode === 'safe_auto_fix').length,
       approveRequired: actions.filter((action) => action.mode === 'approve_required').length,

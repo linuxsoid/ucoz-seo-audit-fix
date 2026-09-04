@@ -843,10 +843,25 @@ function pruneRateBuckets(now) {
  * X-Forwarded-For читаем только при TRUST_PROXY=1. Без прокси этот заголовок подделывает
  * кто угодно, и лимит по IP перестаёт что-либо ограничивать.
  */
+/**
+ * Настоящий адрес посетителя для лимита частоты.
+ *
+ * X-Forwarded-For это список, который дописывается слева направо каждым прокси по пути.
+ * Первое значение прислал сам клиент, и подделать его может кто угодно: достаточно
+ * добавить свой заголовок к запросу, и каждый запрос выглядит как первый с нового адреса,
+ * то есть лимит частоты обходится целиком. Раньше мы брали именно первое значение.
+ *
+ * Доверять можно только тому, что дописал НАШ прокси, а это последнее значение в списке.
+ * Наш nginx стоит непосредственно перед приложением, поэтому берём его.
+ */
 function clientIp(req) {
   if (TRUST_PROXY) {
-    const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-    if (forwarded) return forwarded;
+    const chain = String(req.headers['x-forwarded-for'] ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const nearest = chain[chain.length - 1];
+    if (nearest) return nearest;
   }
   return req.socket.remoteAddress ?? 'unknown';
 }

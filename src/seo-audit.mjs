@@ -43,7 +43,7 @@ export async function auditSite(startUrl, options = {}) {
           });
           continue;
         }
-        if (link.internal && link.crawlable && !seen.has(link.href) && !queue.includes(link.href)) {
+        if (link.internal && link.page && !seen.has(link.href) && !queue.includes(link.href)) {
           queue.push(link.href);
         }
       }
@@ -413,20 +413,43 @@ function auditHtml(page, links) {
     }
   }
 
-  const crawlableInternal = links.filter((link) => link.internal && link.crawlable).length;
-  if (!crawlableInternal) checks.push(issue('recommended', 'links.internal_missing', page.url, 'Не найдено внутренних ссылок, доступных для обхода.', 'Добавьте внутренние ссылки на важные страницы.'));
+  // Считаем ссылки на СТРАНИЦЫ, а не на файлы. Страница, с которой ведут только ссылки на
+  // прайс в PDF и на картинки, это для поисковика тупик: дальше идти некуда.
+  const internalPages = links.filter((link) => link.internal && link.page).length;
+  if (!internalPages) checks.push(issue('recommended', 'links.internal_missing', page.url, 'Со страницы нет ссылок на другие страницы сайта.', 'Добавьте внутренние ссылки на важные страницы: иначе и посетитель, и поисковик попадают в тупик.'));
 
   return checks;
 }
 
+/**
+ * Ищет одинаковые title и description на разных страницах.
+ *
+ * Одна страница под несколькими адресами дубликатом НЕ считается. Такое бывает постоянно:
+ * ссылка на /index.html ведёт туда же, куда /, сервер отвечает перенаправлением, и обход
+ * записывает две страницы с одинаковым содержимым. Раньше мы объявляли это критичным
+ * дублем title, то есть ставили критичное замечание на нормально настроенном сайте и
+ * заставляли человека искать проблему, которой нет.
+ *
+ * Сравниваем по конечному адресу, тому, куда привели перенаправления: если он совпадает,
+ * это одна и та же страница.
+ */
 function findDuplicates(pages) {
   const checks = [];
+  const distinct = [];
+  const seenFinal = new Set();
+  for (const page of pages) {
+    const key = page.finalUrl || page.url;
+    if (seenFinal.has(key)) continue;
+    seenFinal.add(key);
+    distinct.push(page);
+  }
+
   for (const [kind, reader] of [
     ['title', (page) => textOfFirstTag(page.html, 'title')],
     ['description', (page) => getMeta(page.html, 'name', 'description')]
   ]) {
     const groups = new Map();
-    for (const page of pages) {
+    for (const page of distinct) {
       const value = normalizeWhitespace(reader(page));
       if (!value) continue;
       if (!groups.has(value)) groups.set(value, []);
@@ -495,6 +518,22 @@ function getForLinkCheck(url, guard) {
   });
 }
 
+/**
+ * Ссылка на файл, а не на страницу.
+ *
+ * Такие адреса съедали лимит обхода: восемь страниц это восемь запросов, и если четыре из
+ * них ушли на прайс в PDF и три картинки, до настоящих страниц сайта обход не доходил. При
+ * этом ни одной проверки по файлу сделать нельзя: у картинки нет ни title, ни заголовков.
+ *
+ * Расширение это догадка, но дешёвая и почти всегда верная. Из проверки битых ссылок такие
+ * адреса при этом НЕ выпадают: для этого есть отдельный признак crawlable, и ссылку на
+ * несуществующий прайс мы по-прежнему найдём.
+ */
+function isFileLink(pathname) {
+  return /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|tar|gz|csv|txt|rtf|jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|mp3|wav|ogg|mp4|webm|avi|mov|mkv|woff2?|ttf|otf|eot|exe|dmg|apk|xml|json)$/i
+    .test(String(pathname ?? ''));
+}
+
 function extractLinks(html, baseUrl) {
   const links = [];
   for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
@@ -508,11 +547,15 @@ function extractLinks(html, baseUrl) {
         href,
         text: normalizeWhitespace(stripTags(match[0])),
         internal: url.origin === new URL(baseUrl).origin,
+        // Можно ли спросить у адреса статус: нужно для поиска битых ссылок.
         crawlable: /^https?:$/.test(url.protocol),
+        // Стоит ли ставить адрес в очередь обхода. У файла нет ни title, ни заголовков,
+        // проверять по нему нечего, а лимит обхода он съедает наравне со страницей.
+        page: /^https?:$/.test(url.protocol) && !isFileLink(url.pathname),
         service: isServiceUrl(href, new URL(baseUrl).origin)
       });
     } catch {
-      links.push({ href: raw, text: '', internal: false, crawlable: false });
+      links.push({ href: raw, text: '', internal: false, crawlable: false, page: false });
     }
   }
   return links;
@@ -535,6 +578,59 @@ function summarize(checks) {
  *
  * Срок действия берём из TLS-рукопожатия напрямую: HTTP-ответ его не содержит.
  */
+/**
+ * Разбирает полученный сертификат: срок, доверие, причина недоверия.
+ *
+ * Вынесено отдельной функцией, чтобы это можно было проверить тестом. Поднять в тесте
+ * сервер с истёкшим сертификатом дорого, а вся логика решения живёт здесь и от сети не
+ * зависит: на входе то, что вернул сокет, на выходе замечания.
+ *
+ * @param {string} origin
+ * @param {{peer?: object, authorized?: boolean, authorizationError?: string}} cert
+ * @param {number} [now] текущее время, параметром ради предсказуемости теста
+ */
+export function classifyCertificate(origin, cert, now = Date.now()) {
+  const checks = [];
+  const peer = cert?.peer ?? {};
+  const validTo = peer.valid_to ? new Date(peer.valid_to) : null;
+  const daysLeft = validTo && !Number.isNaN(validTo.getTime())
+    ? Math.round((validTo - now) / 86400000)
+    : null;
+
+  // Истёкший срок называем первым и своим именем, даже если браузер заодно не доверяет
+  // сертификату по другой причине: для владельца сайта «истёк» это понятная поломка с
+  // понятным действием, а «не проходит проверку доверия» непонятно ни то, ни другое.
+  if (daysLeft !== null && daysLeft < 0) {
+    checks.push(issue('critical', 'tls.expired', origin,
+      `Срок действия сертификата истёк ${Math.abs(daysLeft)} дн. назад.`,
+      'Перевыпустите сертификат немедленно: сейчас браузер показывает посетителям красное предупреждение вместо сайта.'));
+    return checks;
+  }
+
+  if (cert?.authorized === false) {
+    checks.push(issue('critical', 'tls.not_trusted', origin,
+      `Браузер не доверяет сертификату сайта${cert.authorizationError ? `: ${cert.authorizationError}` : '.'}`,
+      'Посетитель видит предупреждение о небезопасном соединении и в большинстве случаев уходит. Перевыпустите сертификат у хостинга.'));
+    return checks;
+  }
+
+  if (daysLeft === null) {
+    checks.push(issue('recommended', 'tls.check_failed', origin,
+      'Сертификат получен, но у него не читается срок действия.',
+      'Проверьте сайт на ssllabs.com.'));
+    return checks;
+  }
+
+  if (daysLeft <= 14) {
+    checks.push(issue('critical', 'tls.expiring', origin,
+      `Сертификат истекает через ${daysLeft} дн.`,
+      'Продлите сертификат до окончания срока, иначе сайт начнёт пугать посетителей. У большинства хостингов продление автоматическое, но это стоит проверить.'));
+  } else {
+    checks.push(pass('tls.ok', origin, `HTTPS работает, сертификат действует ещё ${daysLeft} дн.`));
+  }
+  return checks;
+}
+
 async function auditTls(origin) {
   const checks = [];
   let parsed;
@@ -555,45 +651,42 @@ async function auditTls(origin) {
     const tls = await import('node:tls');
     const cert = await new Promise((resolve, reject) => {
       const socket = tls.connect(
-        { host: parsed.hostname, port: 443, servername: parsed.hostname, timeout: 8000 },
+        {
+          host: parsed.hostname,
+          port: 443,
+          servername: parsed.hostname,
+          timeout: 8000,
+          // Соединение НЕ обрываем на плохом сертификате, а получаем его и судим сами.
+          //
+          // Раньше проверка шла с обычной проверкой доверия, и на истёкшем или
+          // самоподписанном сертификате tls.connect просто падал с ошибкой. Мы попадали
+          // в catch и писали «не удалось проверить сертификат» с важностью «рекомендация».
+          // То есть самая заметная посетителю поломка, красная страница вместо сайта,
+          // превращалась в мягкое «посмотрите сами». Ровно наоборот к тому, что нужно.
+          //
+          // Своих данных мы тут никому не отправляем, только читаем сертификат, поэтому
+          // отключение проверки на этом соединении ничего не открывает.
+          rejectUnauthorized: false
+        },
         () => {
           // true просит всю цепочку, а не только конечный сертификат: корень нужен,
           // чтобы понять, у всех ли клиентов он есть.
           const peer = socket.getPeerCertificate(true);
           const authorized = socket.authorized;
+          const authorizationError = socket.authorizationError ? String(socket.authorizationError) : '';
           socket.end();
-          resolve({ peer, authorized });
+          resolve({ peer, authorized, authorizationError });
         }
       );
       socket.on('error', reject);
       socket.on('timeout', () => { socket.destroy(); reject(new Error('таймаут')); });
     });
 
-    if (!cert.authorized) {
-      checks.push(issue('critical', 'tls.not_trusted', origin,
-        'Сертификат не проходит проверку доверия.',
-        'Браузер покажет посетителю предупреждение. Перевыпустите сертификат.'));
-      return checks;
-    }
-
-    const validTo = cert.peer?.valid_to ? new Date(cert.peer.valid_to) : null;
-    if (validTo && !Number.isNaN(validTo.getTime())) {
-      const daysLeft = Math.round((validTo - Date.now()) / 86400000);
-      if (daysLeft < 0) {
-        checks.push(issue('critical', 'tls.expired', origin,
-          'Срок действия сертификата истёк.',
-          'Перевыпустите сертификат немедленно: сайт открывается с предупреждением.'));
-      } else if (daysLeft <= 14) {
-        checks.push(issue('critical', 'tls.expiring', origin,
-          `Сертификат истекает через ${daysLeft} дн.`,
-          'Продлите сертификат до окончания срока, иначе сайт начнёт пугать посетителей.'));
-      } else {
-        checks.push(pass('tls.ok', origin, `HTTPS работает, сертификат действует ещё ${daysLeft} дн.`));
-      }
-    }
-
+    checks.push(...classifyCertificate(origin, cert));
     checks.push(...auditCertChain(origin, cert.peer));
   } catch (error) {
+    // Сюда попадаем, только если соединения нет вообще: не отвечает порт, не резолвится
+    // имя, оборвалось на рукопожатии. Это действительно «проверить не удалось».
     checks.push(issue('recommended', 'tls.check_failed', origin,
       `Не удалось проверить сертификат: ${error.message}`,
       'Проверьте вручную, открывается ли сайт по HTTPS без предупреждений.'));

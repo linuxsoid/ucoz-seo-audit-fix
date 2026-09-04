@@ -175,3 +175,15 @@ test('имена тулов уникальны', () => {
   const names = tools.map((t) => t.name);
   assert.deepEqual(names, [...new Set(names)], 'есть тулы с одинаковыми именами');
 });
+
+test('stdio отвечает на ping, а не ошибкой «метод не найден»', async () => {
+  // ping обязателен по спецификации: им клиент проверяет, жив ли сервер. Мы отвечали
+  // ошибкой, и клиент имел все основания считать сервер сломанным.
+  const ping = JSON.stringify({ jsonrpc: '2.0', id: 21, method: 'ping', params: {} });
+  const { messages } = await runStdio(`${initialize}\n${ping}\n`);
+
+  const answer = messages.find((m) => m.id === 21);
+  assert.ok(answer, 'на ping сервер не ответил');
+  assert.ok(!answer.error, `на ping пришла ошибка: ${JSON.stringify(answer.error)}`);
+  assert.deepEqual(answer.result, {});
+});

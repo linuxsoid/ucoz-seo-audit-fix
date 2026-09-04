@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { auditHtmlBundle, robotsBlocksEveryone } from '../src/seo-audit.mjs';
+import { auditHtmlBundle, robotsBlocksEveryone, classifyCertificate } from '../src/seo-audit.mjs';
 import { lighthouseChecksFromResult, pickTopIssues } from '../src/lighthouse-audit.mjs';
 import { compareAudits } from '../src/compare-audits.mjs';
 
@@ -196,4 +196,93 @@ test('порядок строк User-agent не меняет ответ', () => 
   // А вот здесь звёздочка в ДРУГОЙ группе, и запрет к ней не относится.
   assert.equal(robotsBlocksEveryone('User-agent: Yandex' + NL + 'Disallow: /' + NL + 'User-agent: *' + NL + 'Disallow: /admin/'), false,
     'запрет в чужой группе');
+});
+
+test('истёкший сертификат это критично, а не «не удалось проверить»', () => {
+  // Раньше проверка шла с обычной проверкой доверия, и на истёкшем сертификате соединение
+  // просто падало. Мы попадали в catch и писали «не удалось проверить сертификат» с
+  // важностью «рекомендация»: самая заметная посетителю поломка, красная страница вместо
+  // сайта, превращалась в мягкое «посмотрите сами».
+  const NOW = Date.parse('2026-09-04T00:00:00Z');
+  const expired = classifyCertificate('https://a.example', {
+    peer: { valid_to: 'Aug 20 00:00:00 2026 GMT' },
+    authorized: false,
+    authorizationError: 'CERT_HAS_EXPIRED'
+  }, NOW);
+
+  assert.equal(expired.length, 1);
+  assert.equal(expired[0].code, 'tls.expired');
+  assert.equal(expired[0].severity, 'critical');
+  assert.match(expired[0].message, /истёк/i);
+});
+
+test('самоподписанный сертификат это критично', () => {
+  const NOW = Date.parse('2026-09-04T00:00:00Z');
+  const selfSigned = classifyCertificate('https://a.example', {
+    peer: { valid_to: 'Dec 31 00:00:00 2027 GMT' },
+    authorized: false,
+    authorizationError: 'DEPTH_ZERO_SELF_SIGNED_CERT'
+  }, NOW);
+
+  assert.equal(selfSigned[0].code, 'tls.not_trusted');
+  assert.equal(selfSigned[0].severity, 'critical');
+  // Причину недоверия надо назвать: без неё непонятно, что именно чинить.
+  assert.match(selfSigned[0].message, /SELF_SIGNED/);
+});
+
+test('здоровый сертификат проходит проверку', () => {
+  const NOW = Date.parse('2026-09-04T00:00:00Z');
+  const ok = classifyCertificate('https://a.example', {
+    peer: { valid_to: 'Dec 1 00:00:00 2026 GMT' },
+    authorized: true,
+    authorizationError: ''
+  }, NOW);
+
+  assert.equal(ok[0].code, 'tls.ok');
+  assert.equal(ok[0].severity, 'pass');
+});
+
+test('сертификат на исходе это критично, но с другим текстом', () => {
+  const NOW = Date.parse('2026-09-04T00:00:00Z');
+  const soon = classifyCertificate('https://a.example', {
+    peer: { valid_to: 'Sep 14 00:00:00 2026 GMT' },
+    authorized: true,
+    authorizationError: ''
+  }, NOW);
+
+  assert.equal(soon[0].code, 'tls.expiring');
+  assert.equal(soon[0].severity, 'critical');
+  assert.match(soon[0].message, /через 10 дн/);
+});
+
+test('ссылки на файлы не съедают лимит обхода, но проверяются на битость', () => {
+  // Восемь страниц это восемь запросов. Если четыре ушли на прайс в PDF и три картинки,
+  // до настоящих страниц сайта обход не доходил, а проверить по файлу нечего: у картинки
+  // нет ни title, ни заголовков.
+  const html = '<html><head><title>Каталог товаров нашего магазина</title></head><body>' +
+    '<h1>Каталог</h1>' +
+    '<a href="/price.pdf">Прайс</a>' +
+    '<a href="/photo.JPG">Фото</a>' +
+    '<a href="/archive.zip">Архив</a>' +
+    '<a href="/catalog/divany">Диваны</a>' +
+    '</body></html>';
+  const result = auditHtmlBundle([{ name: 'page', html, baseUrl: 'https://shop.example/' }]);
+  const links = result.pages[0].links;
+
+  const pages = links.filter((l) => l.page).map((l) => l.href);
+  assert.equal(pages.length, 1, `в очередь обхода попали файлы: ${pages.join(', ')}`);
+  assert.match(pages[0], /divany/);
+
+  // А вот проверять статус у файлов надо: ссылка на несуществующий прайс это проблема.
+  const checkable = links.filter((l) => l.crawlable).length;
+  assert.equal(checkable, 4, 'файлы выпали из проверки битых ссылок');
+});
+
+test('страница со ссылками только на файлы считается тупиком', () => {
+  const html = '<html><head><title>Страница только с файлами внутри</title></head><body>' +
+    '<h1>Файлы</h1><a href="/a.pdf">Раз</a><a href="/b.zip">Два</a></body></html>';
+  const result = auditHtmlBundle([{ name: 'page', html, baseUrl: 'https://shop.example/' }]);
+  const codes = result.checks.map((c) => c.code);
+  assert.ok(codes.includes('links.internal_missing'),
+    'страница, с которой некуда перейти, должна быть замечена');
 });

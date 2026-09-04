@@ -116,6 +116,11 @@ async function handleMessage(message) {
 
     if (message.method === 'notifications/initialized') return;
 
+    // ping обязателен по спецификации: им клиент проверяет, что сервер жив. Мы отвечали
+    // на него ошибкой «метод не найден», и клиент имел все основания считать сервер
+    // сломанным. По HTTP он был обработан, по stdio нет.
+    if (message.method === 'ping') return sendResult(message.id, {});
+
     if (message.method === 'tools/list') {
       return sendResult(message.id, { tools });
     }
