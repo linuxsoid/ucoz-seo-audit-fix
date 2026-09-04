@@ -79,6 +79,9 @@ const EN = {
   'tls.expiring': ['Certificate expires soon', 'Renew before it lapses.'],
   'tls.ok': ['HTTPS works, certificate valid', ''],
   'tls.check_failed': ['Certificate could not be checked', 'Verify manually that the site opens over HTTPS without warnings.'],
+  'tls.new_root': ['Certificate chain uses a new Let’s Encrypt root (Generation Y)',
+    'Some older clients, notably Windows without recent updates, do not know this root yet and will show a warning. Make sure the server serves the full cross-signed chain and check the site on ssllabs.com.'],
+  'tls.chain_ok': ['Certificate chain is fine', ''],
 
   'trust.contacts_missing': ['No phone, email or messenger found on the site', 'Add a way to get in touch in the header or footer.'],
   'trust.contacts_ok': ['Contact details present', ''],
