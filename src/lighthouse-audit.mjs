@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { withBrowserSlot } from './browser-slot.mjs';
+import { killChrome, CHROME_FLAGS, chromeMemoryCheck } from './chrome-cleanup.mjs';
 import { join, resolve } from 'node:path';
 
 const CATEGORY_LABELS = {
@@ -139,16 +140,14 @@ async function runLighthouseInternal(url, options = {}) {
     return unavailableResult(targetUrl, `Lighthouse не установлен или не загрузился: ${error.message}`);
   }
 
+  // Та же проверка, что и в браузерной диагностике: Chrome поднимают оба места, и
+  // упираться в таймаут вместо честного отказа не должно ни одно из них.
+  const memory = chromeMemoryCheck();
+  if (!memory.ok) return unavailableResult(targetUrl, memory.reason, { formFactor, categories });
+
   let chrome;
   try {
-    chrome = await chromeLauncher.launch({
-      chromeFlags: [
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage'
-      ]
-    });
+    chrome = await chromeLauncher.launch({ chromeFlags: CHROME_FLAGS });
 
     const result = await lighthouse(targetUrl, {
       port: chrome.port,
@@ -213,13 +212,11 @@ async function runLighthouseInternal(url, options = {}) {
       categories
     });
   } finally {
-    if (chrome) {
-      try {
-        await chrome.kill();
-      } catch {
-        // Cleanup should not hide the Lighthouse result.
-      }
-    }
+    // Уборка через общий модуль: он проверяет, что процесс действительно закончился, и
+    // добивает его, если нет. Пустой обработчик ошибки, который стоял здесь раньше,
+    // прятал утечку: на боевом сервере Chrome продолжал жить и через десять минут после
+    // конца прогона, по сорок мегабайт на процесс.
+    await killChrome(chrome);
   }
 }
 

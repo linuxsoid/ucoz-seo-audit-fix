@@ -21,6 +21,7 @@
  */
 
 import { withBrowserSlot } from './browser-slot.mjs';
+import { killChrome, CHROME_FLAGS, chromeMemoryCheck } from './chrome-cleanup.mjs';
 
 const CONSOLE_LIMIT = 200;
 const NETWORK_LIMIT = 500;
@@ -53,11 +54,15 @@ async function runDiagnostics(url, options) {
     return unavailable(target, 'В этой версии Node нет встроенного WebSocket. Нужен Node 22 или новее.');
   }
 
+  // Отказываемся заранее и честно, а не упираемся в таймаут. Замерено на боевом сервере:
+  // при малой свободной памяти запрос уходил в 504 от nginx, и человек видел общий отказ,
+  // хотя проверка страниц отработала полностью.
+  const memory = chromeMemoryCheck();
+  if (!memory.ok) return unavailable(target, memory.reason);
+
   let chrome;
   try {
-    chrome = await chromeLauncher.launch({
-      chromeFlags: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage']
-    });
+    chrome = await chromeLauncher.launch({ chromeFlags: CHROME_FLAGS });
   } catch (error) {
     return unavailable(target, `Не удалось запустить Chrome: ${error.message}`);
   }
@@ -73,9 +78,10 @@ async function runDiagnostics(url, options) {
   } catch (error) {
     return unavailable(target, `Диагностика не удалась: ${error.message}`);
   } finally {
-    // Chrome закрываем всегда. Незакрытый headless остаётся висеть в памяти, и на
-    // небольшой машине несколько таких процессов вытеснят соседние службы.
-    try { await chrome.kill(); } catch { /* результат важнее уборки */ }
+    // Chrome закрываем всегда и проверяем, что закрылся. Раньше здесь стоял пустой
+    // обработчик ошибки, и он прятал утечку: на боевом сервере процессы продолжали жить
+    // и через десять минут после конца прогона.
+    await killChrome(chrome);
   }
 }
 
