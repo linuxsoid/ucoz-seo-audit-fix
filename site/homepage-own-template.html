@@ -229,7 +229,12 @@
     .matrix { display: block; overflow-x: auto; max-width: 100%; }
     /* Адреса страниц и ресурсов в результатах бывают очень длинными и без пробелов,
        переносить их можно только по любому символу. */
-    .check-list a, .check-list code, .check-out a { overflow-wrap: anywhere; }
+    /* Адреса в результатах бывают очень длинными и без пробелов: строка запроса к
+       аналитике легко тянет на полторы тысячи символов. Раньше правило покрывало
+       только ссылки и код, а браузерная часть печатает адреса плоским текстом, и
+       страница уезжала вбок. Переносим всё содержимое результатов. */
+    .check-out, .check-out li, .check-out p, .check-out div, .check-out span,
+    .check-list a, .check-list code { overflow-wrap: anywhere; min-width: 0; }
     img { max-width: 100%; height: auto; }
       .dl-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .dl-row .btn { padding: 9px 14px; font-size: 14px; cursor: pointer; }
@@ -619,6 +624,9 @@ npm install --omit=dev</code></pre>
     var lastReports = null;
     var lastMeta = {};
     var lastJson = null;
+    // HAR приходит из браузерной части: это запись всех сетевых запросов в
+    // стандартном формате, который открывают DevTools и любой анализатор.
+    var lastHar = null;
 
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
@@ -724,7 +732,8 @@ npm install --omit=dev</code></pre>
             dlBtn('html', 'Для человека, HTML') +
             dlBtn('agent-ru', 'Для ИИ, RU') +
             dlBtn('agent-en', 'Для ИИ, EN') +
-            dlBtn('json', 'JSON') +
+            dlBtn('har', 'HAR') +
+        dlBtn('json', 'JSON') +
           '</div></div>'
         : '';
 
@@ -815,6 +824,7 @@ npm install --omit=dev</code></pre>
           });
         })
         .then(function (data) {
+          lastHar = (data.browser && data.browser.har) || null;
           renderDeep(data);
           // Файлы отдаём только теперь: в них весь результат, включая Lighthouse.
           showDownloads(data.reports, quick);
@@ -891,6 +901,12 @@ npm install --omit=dev</code></pre>
         parts.push('<div class="check-note">Браузерная диагностика: ' + escapeHtml(br.unavailable) + '</div>');
       } else {
         var b = br.summary || {};
+        // Если страница не догрузилась за отведённое время, об этом надо сказать прямо:
+        // иначе отчёт выглядит полным, а часть запросов и ошибок в него не попала.
+        if (br.loadNote) {
+          parts.push('<div class="check-msg bad" style="margin-top:12px">' +
+            escapeHtml(br.loadNote) + '</div>');
+        }
         parts.push('<div class="check-scores">' +
           score(b.consoleErrors ? 'crit' : 'ok', b.consoleErrors || 0, 'ошибок консоли') +
           score(b.jsErrors ? 'crit' : 'ok', b.jsErrors || 0, 'ошибок JavaScript') +
@@ -937,6 +953,8 @@ npm install --omit=dev</code></pre>
         'agent-ru': [files.agentMdRu, 'seo-agent-ru-' + host + '-' + stamp + '.md', 'text/markdown'],
         'agent-en': [files.agentMdEn, 'seo-agent-en-' + host + '-' + stamp + '.md', 'text/markdown'],
         'html': [files.humanHtml, 'seo-otchet-' + host + '-' + stamp + '.html', 'text/html'],
+        'har': [lastHar ? JSON.stringify(lastHar, null, 2) : null,
+                host + '-' + stamp + '.har', 'application/json'],
         'json': [null, 'seo-audit-' + host + '-' + stamp + '.json', 'application/json']
       };
       var entry = map[kind];

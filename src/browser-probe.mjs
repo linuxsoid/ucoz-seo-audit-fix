@@ -170,7 +170,10 @@ async function probe(cdp, target, waitMs, formFactor) {
   }
 
   await cdp.send('Page.navigate', { url: target });
-  await waitForLoad(cdp, 30000);
+  // Ждём событие load, но не бесконечно. Если сайт очень медленный или вообще не
+  // досылает ресурсы, ждать до победного нельзя: слот браузера один, и один такой сайт
+  // заблокировал бы очередь для всех остальных.
+  const loaded = await waitForLoad(cdp, 30000);
   // Часть скриптов и запросов стартует уже после события load, поэтому слушаем ещё
   // немного: без этой паузы отчёт систематически недосчитывает аналитику и виджеты.
   await sleep(waitMs);
@@ -196,6 +199,14 @@ async function probe(cdp, target, waitMs, formFactor) {
     scannedAt: new Date().toISOString(),
     formFactor,
     ms: Date.now() - startedAt,
+    // Честно говорим, дождались ли мы полной загрузки. Молчать об этом нельзя: отчёт по
+    // недогруженной странице выглядит законченным, а данных в нём меньше, чем на самом
+    // деле, и человек об этом не догадается.
+    loadComplete: loaded,
+    loadNote: loaded
+      ? ''
+      : 'Страница не сообщила о полной загрузке за 30 секунд. Данные собраны на этот момент, часть поздних запросов и ошибок могла не попасть в отчёт.',
+    har: buildHar(target, list),
     сводка: {
       ошибокКонсоли: errors.length,
       предупреждений: warnings.length,
@@ -243,15 +254,76 @@ function compactRequest(r) {
   };
 }
 
-/** Ждём Page.loadEventFired, но не бесконечно: висящий сайт не должен занимать слот. */
+/**
+ * Ждём Page.loadEventFired, но не бесконечно: висящий сайт не должен занимать слот.
+ * Возвращает true, если загрузка действительно завершилась, и false, если вышло время.
+ * Разница важна: по ней отчёт честно говорит, полные в нём данные или нет.
+ */
 function waitForLoad(cdp, timeoutMs) {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, timeoutMs);
+    const timer = setTimeout(() => resolve(false), timeoutMs);
     cdp.once('Page.loadEventFired', () => {
       clearTimeout(timer);
-      resolve();
+      resolve(true);
     });
   });
+}
+
+/**
+ * Собирает HAR 1.2 из уже снятых сетевых данных.
+ *
+ * Зачем формат, а не свой JSON. HAR это то, что человек экспортирует из вкладки Network
+ * руками, и его открывают DevTools, Chrome, Firefox и любой сторонний анализатор. Отдавая
+ * HAR, мы не заставляем никого разбираться в нашей структуре.
+ *
+ * Оговорка про полноту: мы пишем то, что даёт протокол при обычном обходе, то есть метод,
+ * адрес, статус, тип, размер и длительность. Заголовков и тел ответов здесь нет, они нам
+ * для аудита не нужны, а тела к тому же раздули бы файл в десятки раз.
+ */
+function buildHar(pageUrl, requests) {
+  const started = new Date().toISOString();
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'uCoz SEO Audit & Fix', version: '0.1.0' },
+      pages: [{
+        startedDateTime: started,
+        id: 'page_1',
+        title: pageUrl,
+        pageTimings: { onContentLoad: -1, onLoad: -1 }
+      }],
+      entries: requests.map((r) => ({
+        pageref: 'page_1',
+        startedDateTime: started,
+        time: typeof r.ms === 'number' ? r.ms : -1,
+        request: {
+          method: r.method || 'GET',
+          url: r.url,
+          httpVersion: 'HTTP/1.1',
+          cookies: [],
+          headers: [],
+          queryString: [],
+          headersSize: -1,
+          bodySize: -1
+        },
+        response: {
+          status: r.status ?? 0,
+          statusText: r.failed ? String(r.failed) : '',
+          httpVersion: 'HTTP/1.1',
+          cookies: [],
+          headers: [],
+          content: { size: r.bytes || 0, mimeType: r.mimeType || '' },
+          redirectURL: '',
+          headersSize: -1,
+          bodySize: r.bytes || 0
+        },
+        cache: {},
+        timings: { send: 0, wait: typeof r.ms === 'number' ? r.ms : 0, receive: 0 },
+        _resourceType: r.type || '',
+        _fromCache: Boolean(r.fromCache)
+      }))
+    }
+  };
 }
 
 /**

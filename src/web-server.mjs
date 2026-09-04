@@ -323,6 +323,9 @@ async function handleDeepAudit(req, res) {
       } : { unavailable: lighthouse?.reason ?? 'Lighthouse недоступен.' },
       browser: browser?.available ? {
         summary: browser.summary,
+        loadComplete: browser.loadComplete,
+        loadNote: browser.loadNote,
+        har: browser.har,
         consoleErrors: browser.consoleErrors.slice(0, 10),
         jsErrors: browser.jsErrors.slice(0, 10),
         failedRequests: browser.failedRequests.slice(0, 10),
