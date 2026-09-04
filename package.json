@@ -1,0 +1,32 @@
+{
+  "name": "ucoz-seo-audit-fix",
+  "version": "0.1.0",
+  "description": "MCP server for public uCoz SEO audit reports and safe-fix planning.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src",
+    "scripts",
+    "README.md",
+    "README-install.md"
+  ],
+  "bin": {
+    "ucoz-seo-audit": "./src/cli.mjs",
+    "ucoz-seo-audit-mcp": "./src/mcp-server.mjs"
+  },
+  "scripts": {
+    "audit": "node ./src/cli.mjs audit",
+    "fix-template": "node ./src/cli.mjs fix-template",
+    "mcp": "node ./src/mcp-server.mjs",
+    "smoke": "node ./src/cli.mjs audit https://api.ucoz.net/ --max-pages 3 --format markdown",
+    "smoke:mcp": "node ./scripts/mcp-smoke.mjs",
+    "audit:mcp": "node ./scripts/mcp-audit-site.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chrome-launcher": "^1.2.1",
+    "lighthouse": "^13.4.1"
+  }
+}

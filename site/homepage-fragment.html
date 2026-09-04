@@ -1,0 +1,105 @@
+<style>
+.seo-mcp-page{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#1b2029}
+.seo-mcp-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,.95fr);gap:28px;align-items:center;padding:42px 0}
+.seo-mcp-kicker{color:#0d9b78;font-weight:800;text-transform:uppercase;font-size:12px}
+.seo-mcp-page h1{font-size:clamp(34px,6vw,66px);line-height:1;margin:12px 0 18px;letter-spacing:0}
+.seo-mcp-page h2{font-size:30px;margin:0 0 16px}
+.seo-mcp-lead{font-size:19px;color:#616977;max-width:680px}
+.seo-mcp-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+.seo-mcp-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #ded8cc;background:#fffdfa;color:#1b2029;text-decoration:none;font-weight:700}
+.seo-mcp-btn-primary{background:#1f67d2;border-color:#1f67d2;color:#fff!important}
+.seo-mcp-report{background:#111827;color:#e7edf7;border-radius:8px;padding:18px;box-shadow:0 24px 60px rgba(28,31,38,.18);overflow:hidden}
+.seo-mcp-report-top{display:flex;justify-content:space-between;gap:12px;color:#9ca9ba;font-size:13px;border-bottom:1px solid #2c3646;padding-bottom:12px}
+.seo-mcp-score{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.seo-mcp-score div{background:#1f2937;border-radius:8px;padding:12px}
+.seo-mcp-score b{display:block;font-size:26px;color:#fff}
+.seo-mcp-row{display:grid;grid-template-columns:98px 1fr;gap:10px;padding:10px 0;border-top:1px solid #2c3646;font-size:14px}
+.seo-mcp-tag{width:max-content;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:800;background:#3f2d12;color:#ffd796}
+.seo-mcp-tag-red{background:#441c24;color:#ffb7c2}
+.seo-mcp-section{padding:32px 0}
+.seo-mcp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.seo-mcp-card{background:#fffdfa;border:1px solid #ded8cc;border-radius:8px;padding:18px}
+.seo-mcp-card h3{margin:0 0 8px;font-size:18px}
+.seo-mcp-card p{color:#616977;margin:0}
+.seo-mcp-hint{color:#616977;margin:8px 0 0}
+.seo-mcp-hint a{font-weight:700;color:#1f67d2}
+.seo-mcp-steps{counter-reset:step;display:grid;gap:10px}
+.seo-mcp-step{counter-increment:step;display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:start;background:#fffdfa;border:1px solid #ded8cc;border-radius:8px;padding:16px}
+.seo-mcp-step:before{content:counter(step);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#eef4ff;color:#1f67d2;font-weight:800}
+.seo-mcp-page pre{margin:12px 0 0;padding:14px;overflow:auto;background:#111827;color:#edf2fb;border-radius:8px;font-size:13px}
+.seo-mcp-page code{font-family:ui-monospace,Consolas,monospace}
+.seo-mcp-notice{background:#eaf8f2;border-color:#c7eadb}
+@media(max-width:840px){.seo-mcp-hero{grid-template-columns:1fr;padding-top:30px}.seo-mcp-grid{grid-template-columns:1fr}.seo-mcp-score{grid-template-columns:1fr}}
+</style>
+
+<div class="seo-mcp-page">
+  <section class="seo-mcp-hero">
+    <div>
+      <img src="https://logo.ucoz.com/LOGOBlack.png" alt="uCoz" width="92" height="34" style="display:block;margin-bottom:18px">
+      <div class="seo-mcp-kicker">MCP для uCoz</div>
+      <h1>SEO-аудит сайта без ручной рутины</h1>
+      <p class="seo-mcp-lead">Агент сканирует публичные страницы, группирует проблемы по URL и шаблонам, готовит safe-fix план и помогает аккуратно внести правки через официальный uCoz MCP.</p>
+      <div class="seo-mcp-actions">
+        <a class="seo-mcp-btn seo-mcp-btn-primary" href="/seo-mcp/ucoz-seo-audit-fix-0.1.0.zip">Скачать ZIP</a>
+        <a class="seo-mcp-btn" href="/seo-mcp/README-install.md">Открыть инструкцию</a>
+        <a class="seo-mcp-btn" href="/seo-mcp/install.html">Статичная версия лендинга</a>
+      </div>
+    </div>
+    <div class="seo-mcp-report">
+      <div class="seo-mcp-report-top"><span>seo-report.html</span><span>20 страниц</span></div>
+      <div class="seo-mcp-score">
+        <div><b>5</b>критичных</div>
+        <div><b>58</b>рекомендаций</div>
+        <div><b>64</b>проверки OK</div>
+      </div>
+      <div class="seo-mcp-row"><span class="seo-mcp-tag seo-mcp-tag-red">Страница</span><span>Замечания сгруппированы по публичному URL</span></div>
+      <div class="seo-mcp-row"><span class="seo-mcp-tag">Шаблон</span><span>Показывается название шаблона и module_id/template_id</span></div>
+      <div class="seo-mcp-row"><span class="seo-mcp-tag">Approve</span><span>Перед записью нужен backup, diff и явное подтверждение</span></div>
+    </div>
+  </section>
+
+  <section class="seo-mcp-section">
+    <h2>Что внутри</h2>
+    <div class="seo-mcp-grid">
+      <article class="seo-mcp-card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
+      <article class="seo-mcp-card"><h3>Отчеты для людей</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
+      <article class="seo-mcp-card"><h3>Lighthouse без ручного запуска</h3><p>Агент сам запускает Chrome/Lighthouse и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
+      <article class="seo-mcp-card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
+      <article class="seo-mcp-card"><h3>Связка с uCoz</h3><p>Официальный <code>ucoz-mcp</code> читает шаблоны, страницы и FTP-файлы, а SEO MCP делает аудит и safe-fix план.</p><p class="seo-mcp-hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
+    </div>
+  </section>
+
+  <section class="seo-mcp-section">
+    <h2>Установка</h2>
+    <div class="seo-mcp-steps">
+      <div class="seo-mcp-step"><div><strong>Добавьте SEO MCP в Codex</strong><pre><code>[mcp_servers.ucoz-seo-audit-fix]
+command = "npx"
+args = ["-y", "--package", "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz", "ucoz-seo-audit-mcp"]
+startup_timeout_sec = 60</code></pre></div></div>
+      <div class="seo-mcp-step"><div><strong>Подключите официальный uCoz MCP</strong><p class="seo-mcp-hint">Если официальный MCP еще не настроен, откройте <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">инструкцию uCoz по подключению MCP</a>.</p><pre><code>[mcp_servers.ucoz]
+command = "npx"
+args = ["-y", "ucoz-mcp@latest"]
+
+[mcp_servers.ucoz.env]
+UCOZ_API_TOKEN = "sk_live_..."
+UCOZ_SITE_URL = "https://your-site.ucoz.net/"
+UCOZ_FTP_HOST = "your-site.ucoz.net"
+UCOZ_FTP_USER = "..."
+UCOZ_FTP_PASS = "..."</code></pre></div></div>
+      <div class="seo-mcp-step"><div><strong>Перезапустите MCP в клиенте</strong><pre><code>После сохранения конфига Codex/Cursor/Claude сам скачает пакет и запустит MCP.</code></pre></div></div>
+    </div>
+  </section>
+
+  <section class="seo-mcp-section">
+    <h2>Как работает</h2>
+    <div class="seo-mcp-grid">
+      <article class="seo-mcp-card"><h3>1. Audit</h3><p><code>audit_site</code> сканирует сайт и создает отчет с группировкой по страницам.</p></article>
+      <article class="seo-mcp-card"><h3>2. Lighthouse</h3><p><code>run_lighthouse_audit</code> снимает performance/SEO-сигналы через Chrome без ручной проверки.</p></article>
+      <article class="seo-mcp-card"><h3>3. Fix & verify</h3><p>Официальный <code>ucoz-mcp</code> применяет точечный diff, затем аудит запускается повторно.</p></article>
+    </div>
+    <article class="seo-mcp-card seo-mcp-notice" style="margin-top:14px">
+      <h3>Важно про безопасность</h3>
+      <p>Не кладите реальные API-ключи и FTP-пароли в публичные архивы. Этот пакет не содержит секретов: каждый пользователь подключает свой сайт локально в MCP-клиенте.</p>
+    </article>
+  </section>
+</div>

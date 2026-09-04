@@ -1,0 +1,134 @@
+<html lang="ru" data-theme="$COLOR_SCHEME$">
+<head>
+<meta name="color-scheme" content="$COLOR_SCHEME$">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>$SITE_NAME$ - $MODULE_NAME$</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<?if($PAGE_ID$ = 'sitePage1' || $PAGE_ID$ = 'sitePage2' || ($MODULE_ID$ = 'shop' && ($PAGE_ID$ = 'category' || $PAGE_ID$ = 'home'  || $PAGE_ID$ = 'wishlist' || $PAGE_ID$ = 'usergoods'   || $PAGE_ID$ = 'entry')))?>
+<link type="text/css" rel="stylesheet" href="/.s/t/2301/swiper/swiper-bundle.min.css">
+<?endif?>
+<link type="text/css" rel="stylesheet" href="/.s/src/css/2301.css">
+$AJAX_JS$
+</head>
+<body class="module-$MODULE_ID$">
+<div id="layout" class="layout $PAGE_ID$-layout">
+	$GLOBAL_AHEADER$
+	<?if($PAGE_ID$='sitePage1')?>$GLOBAL_SLIDER$<?endif?>
+	<div class="main">
+		<div class="container main-container">
+			<?if($MODULE_ID$='forum')?><div class="tpl-content forum-box"><?endif?>
+			<!-- <middle> -->
+			<div class="tpl-content">
+				<?if($PAGE_ID$='sitePage1')?>
+				<div class="info-box goods-box">
+					<h2>Popular goods</h2>
+					<div class="goods-list">
+						<!--<new_informer>-->{
+						"title":"Popular goods",
+						"module":"sh",
+						"sort":"6",
+						"max_entries":"6",
+						"max_columns":"1",
+						"categories_list":"",
+						"entries_list":"",
+						"title_max_length":"",
+						"data_type":"0",
+						"curdate":"",
+						"template":"<div class=\"product-card\"><div class=\"product-pictures\"><a class=\"product-img-link\" href=\"$ENTRY_URL$\"><img id=\"$BLOCK_PREF$-gphoto-$ID$\" class=\"product-img\" src=\"$THUMB$\" alt=\"$NAME$\"></a></div><div class=\"product-content\"><div class=\"product-actions\">$2WISHLIST$ $2COMPARE$</div><div class=\"product-main\"><a class=\"product-card-title\" href=\"$ENTRY_URL$\">$NAME$</a></div><div class=\"product-buy-box\"><div class=\"price-box\"><?if($PRICE_OLD$)?><s>$PRICE_OLD$</s> <span class=\"newprice\">$PRICE$</span><?else?>$PRICE$<?endif?></div><div class=\"basket-container\"><?if($OPTIONS$)?><a class=\"basket-link\" href=\"$ENTRY_URL$\"></a><?else?>$2BASKET$<?endif?></div></div></div></div>",
+						"no_entries_msg":"No added products"
+						}<!--</new_informer>-->
+					</div>
+					<a class="catalog-link" href="/shop"><!--<s240347>-->Перейти в каталог<!--</s>--></a>
+				</div>
+				<?endif?>
+				<?if($PAGE_ID$='sitePage3')?>
+				$GLOBAL_CONTACTBOX$
+				<?endif?>
+				<?if($MODULE_ID$='index')?><div class="index-page-content"><?endif?><!-- <body> -->$CONTENT$<!-- </body> --><?if($MODULE_ID$='index')?></div><?endif?>
+				<?if($PAGE_ID$='sitePage1'  || $PAGE_ID$='sitePage2')?>
+				$GLOBAL_TEAM$
+				<?endif?>
+
+				<?if($PAGE_ID$='sitePage1' || $PAGE_ID$='sitePage2')?>
+				$GLOBAL_REVIEWS$
+				<?endif?>
+
+				<?if($PAGE_ID$='sitePage1')?>
+				$GLOBAL_ADVANTAGES$
+				<?endif?>
+
+				<?if($PAGE_ID$='sitePage1')?>
+				$GLOBAL_LANDBOX$
+				<?endif?>
+
+				<?if($PAGE_ID$='sitePage1')?>
+				$GLOBAL_FAQ$
+				<?endif?>
+		</div>
+		<?if(!$HIDE_CLEFTER$)?>
+		<aside id="sidebar" class="sidebar">
+			<div class="sidebar-container">
+				<?if($USERS_ON$ && $PAGE_ID$ != 'login' && $PAGE_ID$ != 'userdetails')?>
+				<div class="sidebar-block">
+					<div class="inner">
+						<div class="user-box">
+							<?if($USER_LOGGED_IN$)?>
+							<div class="user-box-header">
+								<div class="user-box-avatar">
+									<?if($USER_AVATAR_URL$)?>
+									<img src="$USER_AVATAR_URL$" alt="$USERNAME$">
+									<?else?>
+									<svg class="user-box-avatar-icon"><use xlink:href="/.s/t/2301/icons/icons.svg#user_icon"></use></svg>
+									<?endif?>
+								</div>
+								<div class="user-box-name">$USERNAME$</div>
+							</div>
+							<?endif?>
+							<?if(!$USER_LOGGED_IN$)?><h3><!--<s5212>-->Приветствуем вас<!--</s>-->!</h3><?endif?>
+							<div class="user-box-links">
+								<?if($USER_LOGGED_IN$)?>
+								<a title="Мой профиль" href="$PERSONAL_PAGE_LINK$"><!--<s5214>-->Мой профиль<!--</s>--></a>|<a title="Выход" href="$LOGOUT_LINK$"><!--<s5164>-->Выход<!--</s>--></a>
+								<?else?>
+								<a title="Вход" href="$LOGIN_LINK$"><!--<s3087>-->Вход<!--</s>--></a>|<a title="Регистрация" href="$REGISTER_LINK$"><!--<s3089>-->Регистрация<!--</s>--></a>
+								<?endif?>
+							</div>
+						</div>
+					</div>
+				</div>
+				<?endif?>
+				<?if(($MODULE_SEARCH_FORM$ || $SEARCH_FORM$) && $MODULE_ID$ != 'search')?>
+				<div class="sidebar-block">
+					<div class="inner">
+						<h3 class="sidebar-block-title"><!--<s3163>-->Поиск<!--</s>--></h3>
+						<div class="sidebar-block-content sidebar-search-content">
+							<?if($MODULE_SEARCH_FORM$)?>$MODULE_SEARCH_FORM$<?else?>$SEARCH_FORM$<?endif?>
+							<svg class="svg-icon search-form-icon"><use xlink:href="/.s/t/2301/icons/icons.svg#search_icon"></use></svg>
+						</div>
+					</div>
+				</div>
+				<?endif?>
+				$GLOBAL_CLEFTER$
+			</div>
+		</aside>
+		<?endif?>
+		<!-- </middle> -->
+		<?if($MODULE_ID$='forum')?></div><?endif?>
+	</div>
+</div>
+$GLOBAL_BFOOTER$
+</div>
+
+<script src="/.s/t/2301/main.js"></script>
+<?if($BASKET$)?><script src="/.s/t/2301/shop-cart.min.js?v=1.0"></script><?endif?>
+<?if($PAGE_ID$ = 'sitePage1' || $PAGE_ID$ = 'sitePage2'  || ($MODULE_ID$ = 'shop' && ($PAGE_ID$ = 'category' || $PAGE_ID$ = 'home' || $PAGE_ID$ = 'wishlist' || $PAGE_ID$ = 'usergoods'  || $PAGE_ID$ = 'entry')))?>
+<script src="/.s/t/2301/swiper/swiper-bundle.min.js"></script>
+<?endif?>
+<?if(($MODULE_ID$ = 'shop' && ($PAGE_ID$ = 'category' || $PAGE_ID$ = 'home' || $PAGE_ID$ = 'wishlist' || $PAGE_ID$ = 'usergoods')))?>
+$GLOBAL_SHSLIDER$
+<?endif?>
+</body>
+</html>

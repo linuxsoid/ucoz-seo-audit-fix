@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>uCoz SEO Audit & Fix MCP</title>
+  <meta name="description" content="Публичный MCP-сервер для SEO-аудита uCoz: отчеты, группировка по страницам и шаблонам, безопасный план исправлений.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="uCoz SEO Audit & Fix MCP">
+  <meta property="og:description" content="SEO-аудит и safe-fix workflow для uCoz через MCP.">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ee;
+      --panel: #fffdfa;
+      --ink: #1b2029;
+      --muted: #616977;
+      --line: #ded8cc;
+      --accent: #1f67d2;
+      --accent-2: #0d9b78;
+      --warn: #b7791f;
+      --soft: #eef4ff;
+      --green: #eaf8f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 22px; }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 250, .92);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(14px);
+    }
+    nav {
+      min-height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; text-decoration: none; color: var(--ink); }
+    .brand img { width: 70px; height: auto; display: block; }
+    .navlinks { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+    .navlinks a { color: var(--muted); text-decoration: none; }
+    .hero {
+      padding: 72px 0 42px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+      gap: 34px;
+      align-items: center;
+    }
+    .eyebrow { color: var(--accent-2); font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: 0; }
+    h1 { font-size: clamp(38px, 7vw, 76px); line-height: .98; margin: 12px 0 18px; letter-spacing: 0; }
+    .lead { font-size: 19px; color: var(--muted); max-width: 680px; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .report {
+      background: #111827;
+      color: #e7edf7;
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 24px 60px rgba(28, 31, 38, .18);
+      overflow: hidden;
+    }
+    .report-top { display: flex; justify-content: space-between; gap: 12px; color: #9ca9ba; font-size: 13px; border-bottom: 1px solid #2c3646; padding-bottom: 12px; }
+    .score { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+    .score div { background: #1f2937; border-radius: 8px; padding: 12px; }
+    .score b { display: block; font-size: 26px; color: #fff; }
+    .row { display: grid; grid-template-columns: 98px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid #2c3646; font-size: 14px; }
+    .tag { width: max-content; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 800; background: #3f2d12; color: #ffd796; }
+    .tag.red { background: #441c24; color: #ffb7c2; }
+    section { padding: 34px 0; }
+    h2 { font-size: 30px; margin: 0 0 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .card h3 { margin: 0 0 8px; font-size: 18px; }
+    .card p { color: var(--muted); margin: 0; }
+    .hint { color: var(--muted); margin: 8px 0 0; }
+    .hint a { font-weight: 700; }
+    .wide { grid-column: span 2; }
+    .mini-title { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; font-weight: 800; }
+    .feature-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .feature-list li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid #eee8de; }
+    .feature-list strong { color: var(--ink); }
+    .feature-list span { color: var(--muted); }
+    .matrix { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: table; }
+    .matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid #eee8de; text-align: left; vertical-align: top; }
+    .matrix th { background: #f0ede7; font-size: 13px; text-transform: uppercase; color: #4c5564; }
+    .matrix tr:last-child td { border-bottom: 0; }
+    .pillbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--panel); padding: 6px 10px; font-size: 13px; color: var(--muted); }
+    .steps { counter-reset: step; display: grid; gap: 10px; }
+    .step {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 14px;
+      align-items: start;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .step::before {
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--accent);
+      font-weight: 800;
+    }
+    pre {
+      margin: 12px 0 0;
+      padding: 14px;
+      overflow: auto;
+      background: #111827;
+      color: #edf2fb;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    code { font-family: ui-monospace, Consolas, monospace; }
+    .notice { background: var(--green); border-color: #c7eadb; }
+    footer { padding: 30px 0 42px; color: var(--muted); }
+    @media (max-width: 840px) {
+      nav { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+      .hero { grid-template-columns: 1fr; padding-top: 44px; }
+      .grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+      .feature-list li { grid-template-columns: 1fr; gap: 3px; }
+      .matrix { display: block; overflow-x: auto; }
+      .score { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <nav>
+        <a class="brand" href="/">
+          <img src="https://logo.ucoz.com/LOGOBlack.png" alt="uCoz">
+          <span>SEO Audit & Fix MCP</span>
+        </a>
+        <div class="navlinks">
+          <a href="#download">Скачать</a>
+          <a href="#idea">MVP</a>
+          <a href="#report">Отчет</a>
+          <a href="#install">Установка</a>
+          <a href="#safety">Approve</a>
+          <a href="#workflow">Как работает</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div>
+        <div class="eyebrow">MCP для uCoz</div>
+        <h1>SEO-аудит сайта без ручной рутины</h1>
+        <p class="lead">Агент сканирует публичные страницы, группирует проблемы по URL и шаблонам, готовит safe-fix план и помогает аккуратно внести правки через официальный uCoz MCP.</p>
+        <div class="actions">
+          <a class="btn primary" href="#install">Подключить MCP</a>
+          <a class="btn" href="/seo-mcp/README-install.md">Открыть инструкцию</a>
+        </div>
+      </div>
+      <div class="report" aria-label="Пример отчета">
+        <div class="report-top"><span>seo-report.html</span><span>20 страниц</span></div>
+        <div class="score">
+          <div><b>5</b>критичных</div>
+          <div><b>58</b>рекомендаций</div>
+          <div><b>64</b>проверки OK</div>
+        </div>
+        <div class="row"><span class="tag red">Страница</span><span>Замечания сгруппированы по публичному URL</span></div>
+        <div class="row"><span class="tag">Шаблон</span><span>Показывается название шаблона и module_id/template_id</span></div>
+        <div class="row"><span class="tag">Approve</span><span>Перед записью нужен backup, diff и явное подтверждение</span></div>
+      </div>
+    </div>
+
+    <section id="download">
+      <div class="wrap">
+        <h2>Что внутри</h2>
+        <div class="grid">
+          <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
+          <article class="card"><h3>Отчеты для людей</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
+          <article class="card"><h3>Lighthouse без ручного запуска</h3><p>Агент сам запускает Chrome/Lighthouse и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
+          <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
+          <article class="card wide"><h3>Связка с uCoz</h3><p>SEO MCP отвечает за анализ, отчет и план исправлений. Официальный <code>ucoz-mcp</code> читает шаблоны, страницы и FTP-файлы сайта, делает backup и применяет подтвержденные точечные правки.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
+          <article class="card"><h3>Повторная проверка</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="idea">
+      <div class="wrap">
+        <h2>Соответствие идее 17</h2>
+        <table class="matrix">
+          <thead><tr><th>Требование</th><th>Статус в MVP</th><th>Как реализовано</th></tr></thead>
+          <tbody>
+            <tr><td>Чтение сайта через uCoz MCP/FTP</td><td>Работает через связку</td><td>Этот MCP анализирует HTML и отчеты, официальный <code>ucoz-mcp</code> читает шаблоны, страницы, модули и FTP-файлы. Инструкция: <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">подключение MCP uCoz</a>.</td></tr>
+            <tr><td>Технический и on-page SEO-аудит</td><td>Работает</td><td>Проверяются meta, H1, canonical, Open Graph, Twitter Card, Schema.org, alt, robots, sitemap и внутренние ссылки.</td></tr>
+            <tr><td>Lighthouse / PageSpeed слой</td><td>Добавлен</td><td><code>run_lighthouse_audit</code> запускает Lighthouse через Chrome и возвращает русскую сводку по Performance, SEO, Accessibility, Best Practices и lab metrics.</td></tr>
+            <tr><td>Critical / Recommended</td><td>Работает</td><td>Каждое замечание получает приоритет, а отчет показывает общую сводку и типы проблем.</td></tr>
+            <tr><td>Audit → fix → re-audit</td><td>Работает как агентный сценарий</td><td><code>audit_site</code>, <code>plan_safe_fixes</code>, preview diff, approve, patch через <code>ucoz-mcp</code>, затем <code>compare_audits</code>.</td></tr>
+            <tr><td>Backup / diff / approve</td><td>Заложено в workflow</td><td>Safe-fix план не пишет на сайт сам. Перед изменениями используется backup в <code>ucoz-mcp</code>, просмотр diff и подтверждение человека.</td></tr>
+            <tr><td>Публичный отчет</td><td>Работает</td><td>Генерируются JSON, Markdown и HTML. HTML можно показать клиенту как понятный результат аудита.</td></tr>
+          </tbody>
+        </table>
+        <div class="grid" style="margin-top:14px">
+          <article class="card"><h3>Что уже можно показать в демо</h3><p>Взять реальный uCoz-сайт, запустить аудит, показать список проблем, подготовить safe-fix план, применить подтвержденные правки и повторить проверку.</p></article>
+          <article class="card"><h3>Следующий этап</h3><p>Lighthouse/PageSpeed, Core Web Vitals, PDF-отчет, генерация Schema.org, расширенный canonical/robots/sitemap audit и проверка redirect chains.</p></article>
+          <article class="card"><h3>Что не обещаем</h3><p>Это не Ahrefs/Semrush-клон, не backlink-анализатор и не инструмент, который гарантирует рост позиций или переписывает весь контент сайта.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="report">
+      <div class="wrap">
+        <h2>Как читается отчет</h2>
+        <div class="grid">
+          <article class="card"><h3>Сводка</h3><p>Верх отчета показывает количество Critical, Recommended и Passed, чтобы сразу понять масштаб проблемы.</p></article>
+          <article class="card"><h3>Группировка по страницам</h3><p>Замечания собираются под публичным URL страницы. Служебные ссылки редактирования uCoz не смешиваются с реальными страницами сайта.</p></article>
+          <article class="card"><h3>Где править</h3><p>Для типовых URL отчет подсказывает модуль, название шаблона и <code>module_id/template_id</code>: например страница товара, каталог, регистрация или редактор страниц.</p></article>
+          <article class="card"><h3>Lighthouse</h3><p>Отдельный блок показывает оценки, Core Web Vitals/lab metrics и главные рекомендации без ручного запуска тестов.</p></article>
+        </div>
+        <table class="matrix" style="margin-top:14px">
+          <thead><tr><th>Блок отчета</th><th>Зачем нужен</th><th>Пример</th></tr></thead>
+          <tbody>
+            <tr><td>Публичные страницы</td><td>Все проблемы одной страницы в одном месте.</td><td><code>/shop/2/desc/product</code> и список замечаний к ней.</td></tr>
+            <tr><td>Шаблоны и источники</td><td>Проблемы HTML-шаблонов, переданных из админки или FTP.</td><td>“Страница товара”, <code>module_id=20</code>, <code>template_id=4</code>.</td></tr>
+            <tr><td>Lighthouse / производительность</td><td>Performance, SEO, Accessibility, Best Practices и основные метрики.</td><td>LCP, FCP, CLS, TBT, Speed Index, вес страницы.</td></tr>
+            <tr><td>Пропущенные служебные ссылки</td><td>Показывает, что админские URL были найдены, но исключены из публичного SEO-аудита.</td><td><code>/index/31-...</code> не считается страницей сайта.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Что проверяется</h2>
+        <div class="card">
+          <div class="mini-title">On-page и технические сигналы</div>
+          <ul class="feature-list">
+            <li><strong>Meta</strong><span>Наличие и длина title/description, дубли описаний, viewport и lang.</span></li>
+            <li><strong>Social preview</strong><span>Open Graph и Twitter Card: title, description, type, url.</span></li>
+            <li><strong>Структура страницы</strong><span>H1, изображения без alt, JSON-LD Schema.org и ошибки парсинга JSON-LD.</span></li>
+            <li><strong>Индексация</strong><span>robots.txt, sitemap.xml, запреты на индексацию и базовые проблемы доступности.</span></li>
+            <li><strong>Ссылки</strong><span>Внутренние битые ссылки и отделение публичных URL от ссылок админки/редактирования.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="wrap">
+        <h2>Установка</h2>
+        <div class="steps">
+          <div class="step"><div><strong>Добавьте SEO MCP в Codex</strong><pre><code>[mcp_servers.ucoz-seo-audit-fix]
+command = "npx"
+args = ["-y", "--package", "https://seoaudit.ucoz.net/seo-mcp/ucoz-seo-audit-fix-0.1.0.tgz", "ucoz-seo-audit-mcp"]
+startup_timeout_sec = 60</code></pre></div></div>
+          <div class="step"><div><strong>Подключите официальный uCoz MCP</strong><p class="hint">Если официальный MCP еще не настроен, откройте <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">инструкцию uCoz по подключению MCP</a>.</p><pre><code>[mcp_servers.ucoz]
+command = "npx"
+args = ["-y", "ucoz-mcp@latest"]
+
+[mcp_servers.ucoz.env]
+UCOZ_API_TOKEN = "sk_live_..."
+UCOZ_SITE_URL = "https://your-site.ucoz.net/"
+UCOZ_FTP_HOST = "your-site.ucoz.net"
+UCOZ_FTP_USER = "..."
+UCOZ_FTP_PASS = "..."</code></pre></div></div>
+          <div class="step"><div><strong>Перезапустите MCP в клиенте</strong><pre><code>После сохранения конфига Codex/Cursor/Claude сам скачает пакет и запустит MCP.</code></pre></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <div class="wrap">
+        <h2>Как работает</h2>
+        <div class="grid">
+          <article class="card"><h3>1. Audit</h3><p><code>audit_site</code> сканирует сайт и создает отчет с группировкой по страницам.</p></article>
+          <article class="card"><h3>2. Lighthouse</h3><p><code>run_lighthouse_audit</code> снимает performance/SEO-сигналы через Chrome без ручной проверки.</p></article>
+          <article class="card"><h3>3. Fix & verify</h3><p>Официальный <code>ucoz-mcp</code> применяет точечный diff, затем аудит запускается повторно.</p></article>
+        </div>
+        <div class="pillbar">
+          <span class="pill">audit_site</span>
+          <span class="pill">run_lighthouse_audit</span>
+          <span class="pill">plan_safe_fixes</span>
+          <span class="pill">audit_html_bundle</span>
+          <span class="pill">preview_template_fix</span>
+          <span class="pill">compare_audits</span>
+        </div>
+        <table class="matrix" style="margin-top:14px">
+          <thead><tr><th>Шаг</th><th>Что делает агент</th><th>Что видит человек</th></tr></thead>
+          <tbody>
+            <tr><td>1. Audit</td><td>Сканирует публичные страницы и исключает служебные URL админки.</td><td>Сводку Critical/Recommended/Passed и список страниц с проблемами.</td></tr>
+            <tr><td>2. Lighthouse</td><td>Запускает Lighthouse для стартовой страницы или ключевого URL.</td><td>Оценки Performance/SEO/Accessibility и HTML-отчет Lighthouse.</td></tr>
+            <tr><td>3. Template lookup</td><td>Через <code>ucoz-mcp</code> находит модуль и шаблон, где лучше править проблему.</td><td>Название шаблона и <code>module_id/template_id</code> в отчете.</td></tr>
+            <tr><td>4. Preview</td><td>Готовит безопасную правку и unified diff без записи на сайт.</td><td>Понятный diff: что будет добавлено или изменено.</td></tr>
+            <tr><td>5. Approve</td><td>Ждет явное подтверждение перед записью.</td><td>Контроль над изменениями, особенно если правка затрагивает шаблон.</td></tr>
+            <tr><td>6. Re-audit</td><td>Запускает повторную проверку и сравнивает состояние до/после.</td><td>Сколько проблем исправлено и что осталось в очереди.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="safety">
+      <div class="wrap">
+        <h2>Безопасность правок</h2>
+        <table class="matrix">
+          <thead><tr><th>Режим</th><th>Что попадает</th><th>Как действовать</th></tr></thead>
+          <tbody>
+            <tr><td>Safe auto-fix</td><td>Детерминированные вставки вроде viewport, базовых OG/Twitter meta при надежном источнике данных.</td><td>Можно готовить автоматически, но с diff и повторной проверкой.</td></tr>
+            <tr><td>Approve required</td><td>Canonical, редиректы, Schema.org, исправление ссылок и изменения шаблонов с влиянием на несколько страниц.</td><td>Сначала backup и preview, затем явное подтверждение человека.</td></tr>
+            <tr><td>Manual only</td><td>Переписывание контента, коммерческие обещания, сложный backlink-анализ, субъективные рекомендации.</td><td>Отчет объясняет проблему, но не меняет сайт сам.</td></tr>
+          </tbody>
+        </table>
+        <article class="card notice" style="margin-top:14px">
+          <h3>Важно про безопасность</h3>
+          <p>Не кладите реальные API-ключи и FTP-пароли в публичные архивы. Этот пакет не содержит секретов: каждый пользователь подключает свой сайт локально в MCP-клиенте.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">uCoz SEO Audit & Fix MCP · MVP для безопасного SEO-аудита и повторной проверки. <span style="display:inline-block;margin-left:10px">Используются технологии <a href="https://www.ucoz.ru/"><b>uCoz</b></a></span></div>
+  </footer>
+</body>
+</html>
