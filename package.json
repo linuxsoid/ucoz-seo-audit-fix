@@ -24,7 +24,9 @@
     "audit:mcp": "node ./scripts/mcp-audit-site.mjs",
     "web": "node ./src/web-server.mjs",
     "mcp:http": "node ./src/mcp-http.mjs",
-    "start": "node ./app.js"
+    "start": "node ./app.js",
+    "test": "node --test",
+    "build:template": "node ./scripts/build-ucoz-template.mjs"
   },
   "engines": {
     "node": ">=20"

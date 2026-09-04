@@ -26,18 +26,68 @@
   }
   </script>
   <style>
+    /* Светлая тема по умолчанию. Все цвета живут только здесь: тёмная тема ниже меняет
+       эти же переменные, а не переопределяет правила по месту. Иначе переключатель
+       пришлось бы поддерживать в каждом блоке отдельно. */
     :root {
       color-scheme: light;
       --bg: #f7f4ee;
       --panel: #fffdfa;
       --ink: #1b2029;
-      --muted: #616977;
+      --muted: #5b6371;
       --line: #ded8cc;
       --accent: #1f67d2;
+      --accent-ink: #ffffff;
       --accent-2: #0d9b78;
       --warn: #b7791f;
       --soft: #eef4ff;
       --green: #eaf8f2;
+      --code-bg: #111827;
+      --code-ink: #edf2fb;
+      --header-bg: rgba(255, 253, 250, .92);
+      --shadow: 0 10px 30px rgba(20, 26, 40, .08);
+    }
+
+    /* Тёмная тема. Работает в трёх состояниях: человек выбрал тёмную, человек выбрал
+       светлую, человек ничего не выбирал и решает система. Поэтому системное правило
+       снабжено оговоркой :not([data-theme="light"]), иначе выбор человека проигрывал бы
+       настройке системы. */
+    :root[data-theme="dark"],
+    :root:not([data-theme="light"]) {
+      --dark-bg: #14161b;
+      --dark-panel: #1c2028;
+      --dark-ink: #eef0f4;
+      --dark-muted: #9aa4b2;
+      --dark-line: #2b313b;
+      --dark-accent: #6fa4ff;
+      --dark-accent-ink: #0b1220;
+      --dark-accent-2: #3fd0a4;
+      --dark-warn: #f0c274;
+      --dark-soft: #1b2436;
+      --dark-green: #16301f;
+      --dark-code-bg: #0f131a;
+      --dark-header-bg: rgba(20, 22, 27, .92);
+      --dark-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: var(--dark-bg); --panel: var(--dark-panel); --ink: var(--dark-ink);
+        --muted: var(--dark-muted); --line: var(--dark-line); --accent: var(--dark-accent);
+        --accent-ink: var(--dark-accent-ink); --accent-2: var(--dark-accent-2);
+        --warn: var(--dark-warn); --soft: var(--dark-soft); --green: var(--dark-green);
+        --code-bg: var(--dark-code-bg); --header-bg: var(--dark-header-bg);
+        --shadow: var(--dark-shadow);
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: var(--dark-bg); --panel: var(--dark-panel); --ink: var(--dark-ink);
+      --muted: var(--dark-muted); --line: var(--dark-line); --accent: var(--dark-accent);
+      --accent-ink: var(--dark-accent-ink); --accent-2: var(--dark-accent-2);
+      --warn: var(--dark-warn); --soft: var(--dark-soft); --green: var(--dark-green);
+      --code-bg: var(--dark-code-bg); --header-bg: var(--dark-header-bg);
+      --shadow: var(--dark-shadow);
     }
     * { box-sizing: border-box; }
     body {
@@ -66,19 +116,45 @@
     }
     .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; text-decoration: none; color: var(--ink); }
     .brand img { width: 70px; height: auto; display: block; }
-    .navlinks { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+    .navlinks { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
     .navlinks a { color: var(--muted); text-decoration: none; }
-    .hero {
-      padding: 72px 0 42px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
-      gap: 34px;
-      align-items: center;
+    .navlinks a:hover { color: var(--ink); }
+
+    /* Переключатель темы. Иконка меняется в скрипте: солнце в тёмной теме означает
+       «включить светлую», месяц в светлой означает «включить тёмную». Подпись у кнопки
+       тоже меняется, иначе экранный диктор всегда читает одно и то же. */
+    .theme-toggle {
+      width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+      font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center;
     }
-    .eyebrow { color: var(--accent-2); font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: 0; }
-    h1 { font-size: clamp(38px, 7vw, 76px); line-height: .98; margin: 12px 0 18px; letter-spacing: 0; }
-    .lead { font-size: 19px; color: var(--muted); max-width: 680px; }
+    .theme-toggle:hover { border-color: var(--accent); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Первый экран это одно действие. Никаких колонок и картинок сбоку: заголовок,
+       одна фраза о пользе, поле ввода. */
+    .hero { padding: 64px 0 40px; }
+    .hero-inner { max-width: 780px; }
+    h1 { font-size: clamp(30px, 5.2vw, 52px); line-height: 1.1; margin: 0 0 16px; letter-spacing: 0; }
+    .lead { font-size: 18px; color: var(--muted); max-width: 680px; }
     .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+
+    /* Три коротких факта под полем: снимают вопросы «а мой сайт подойдёт», «сколько
+       ждать» и «что я получу», не заставляя читать текст. */
+    .hero-facts { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px;
+      margin: 18px 0 0; padding: 0; font-size: 14px; color: var(--muted); }
+    .hero-facts li { display: flex; align-items: flex-start; gap: 7px; }
+    .hero-facts li::before { content: "✓"; color: var(--accent-2); font-weight: 800; }
+
+    .steps-3 { list-style: none; counter-reset: s; display: grid; gap: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; }
+    .steps-3 li { counter-increment: s; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 12px; padding: 18px 18px 20px; }
+    .steps-3 li::before { content: counter(s); display: flex; align-items: center;
+      justify-content: center; width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent); color: var(--accent-ink); font-weight: 800; margin-bottom: 10px; }
+    .steps-3 b { display: block; margin-bottom: 5px; }
+    .steps-3 span { color: var(--muted); font-size: 14px; }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -93,22 +169,6 @@
       font-weight: 700;
     }
     .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .report {
-      background: #111827;
-      color: #e7edf7;
-      border-radius: 8px;
-      padding: 18px;
-      box-shadow: 0 24px 60px rgba(28, 31, 38, .18);
-      overflow: hidden;
-    }
-    .report-top { display: flex; justify-content: space-between; gap: 12px; color: #9ca9ba; font-size: 13px; border-bottom: 1px solid #2c3646; padding-bottom: 12px; }
-    .report-top a { color: #dbeafe; font-weight: 700; }
-    .score { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
-    .score div { background: #1f2937; border-radius: 8px; padding: 12px; }
-    .score b { display: block; font-size: 26px; color: #fff; }
-    .row { display: grid; grid-template-columns: 98px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid #2c3646; font-size: 14px; }
-    .tag { width: max-content; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 800; background: #3f2d12; color: #ffd796; }
-    .tag.red { background: #441c24; color: #ffb7c2; }
     section { padding: 34px 0; }
     h2 { font-size: 30px; margin: 0 0 18px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -178,23 +238,70 @@
     .notice { background: var(--green); border-color: #c7eadb; }
     footer { padding: 30px 0 42px; color: var(--muted); }
     @media (max-width: 840px) {
+      /* Меню в столбик, но переключатель темы остаётся в одной строке с логотипом:
+         кнопка на отдельной строке выглядит потерянной. */
       nav { align-items: flex-start; flex-direction: column; padding: 14px 0; }
-      .hero { grid-template-columns: 1fr; padding-top: 44px; }
-      .grid { grid-template-columns: 1fr; }
+      .navlinks { width: 100%; }
+      .hero { padding-top: 36px; }
+      .grid, .grid-2 { grid-template-columns: 1fr; }
+      .steps-3 { grid-template-columns: 1fr; }
       .wide { grid-column: auto; }
       .feature-list li { grid-template-columns: 1fr; gap: 3px; }
       .score { grid-template-columns: 1fr; }
+      /* На телефоне кнопка проверки во всю ширину: так по ней не промахнуться. */
+      .check-form button { width: 100%; }
+      .hero-facts { flex-direction: column; gap: 7px; }
     }
   
-    /* Блок публичной проверки по URL */
-    .check-form { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 8px; }
-    .check-form input { flex: 1 1 320px; min-width: 0; padding: 14px 16px; font: inherit;
-      border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
-    .check-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .check-form button { padding: 14px 26px; font: inherit; font-weight: 700; border: 0;
-      border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
-    .check-form button[disabled] { opacity: .55; cursor: progress; }
+    /* Поле ввода это главное действие страницы, и выглядеть оно должно соответственно:
+       своя подложка, рамка заметнее остальных, крупный шрифт. Раньше это была обычная
+       строка ввода того же веса, что и всё вокруг, и человек её не находил. */
+    .check-form { margin: 26px 0 0; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+    .check-label { display: block; font-weight: 700; font-size: 14px; margin: 0 0 9px; }
+    .check-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .check-form input { flex: 1 1 300px; min-width: 0; padding: 15px 16px; font: inherit;
+      font-size: 17px; border: 2px solid var(--line); border-radius: 10px;
+      background: var(--bg); color: var(--ink); }
+    .check-form input::placeholder { color: var(--muted); opacity: .8; }
+    .check-form input:hover { border-color: var(--accent); }
+    .check-form input:focus { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+    .check-form button { min-height: 52px; padding: 0 28px; font: inherit; font-size: 16px;
+      font-weight: 700; border: 0; border-radius: 10px; background: var(--accent);
+      color: var(--accent-ink); cursor: pointer; }
+    .check-form button:hover { filter: brightness(1.07); }
+    .check-form button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    .check-form button[disabled] { opacity: .6; cursor: progress; filter: none; }
     .check-note { color: var(--muted); font-size: 14px; margin: 0; }
+
+    /* Две колонки и выравнивание карточек по верху: карточки с блоками кода бывают
+       разной высоты, и растянутая до соседа карточка получала внизу пустоту в полэкрана. */
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+
+    .to-top { position: fixed; right: 18px; bottom: 18px; z-index: 20; width: 46px; height: 46px;
+      border-radius: 50%; background: var(--ink); color: var(--bg); text-decoration: none;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+      box-shadow: var(--shadow); }
+    .to-top:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* Кнопка «копировать» у блока кода. Просил Юра: команду выделять мышью в узкой
+       карточке неудобно, а с переносом строк ещё и легко захватить лишнее. */
+    .code-box { position: relative; }
+    .code-copy { position: absolute; top: 8px; right: 8px; padding: 5px 11px; font: inherit;
+      font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 7px;
+      border: 1px solid #3b4657; background: #1f2937; color: #dbe6f7; }
+    .code-copy:hover { background: #2b3646; }
+    .code-copy:focus-visible { outline: 2px solid #7aa7ff; outline-offset: 2px; }
+    .code-box pre { padding-right: 92px; }
+
+    /* Блок результата. Два действия и ничего лишнего: посмотреть и скачать. */
+    .done { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent-2);
+      border-radius: 12px; padding: 18px 20px; margin: 16px 0; }
+    .done h3 { margin: 0 0 6px; font-size: 19px; }
+    .done p { margin: 0 0 14px; color: var(--muted); }
+    .done-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .done-actions .btn { min-height: 48px; padding: 0 20px; }
+    .done-actions .btn.primary { font-size: 16px; }
     .check-out { margin-top: 20px; scroll-margin-top: 80px; }
     .spin { display:inline-block; width:14px; height:14px; margin-right:9px;
       vertical-align:-2px; border:2px solid var(--line); border-top-color: var(--accent);
@@ -252,13 +359,13 @@
     .check-out, .check-out li, .check-out p, .check-out div, .check-out span,
     .check-list a, .check-list code { overflow-wrap: anywhere; min-width: 0; }
     img { max-width: 100%; height: auto; }
-      .dl-row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .dl-row .btn { padding: 9px 14px; font-size: 14px; cursor: pointer; }
     /* Размер файла набран мелко и без отступа слипался с названием: получалось
        «Отчёт для человека, MD25 КБ». Пробел в разметке тут не помогает. */
     /* Размер не должен рваться по строкам: «765» на одной строке, «КБ» на другой
        читается как две разные величины. */
-    .dl-row .check-note { margin-left: 7px; white-space: nowrap; }
+    /* Размер архива рядом с подписью кнопки: без отступа он слипался, а перенос
+       разрывал величину на «765» и «КБ». */
+    .done-actions .check-note { margin-left: 7px; white-space: nowrap; }
       /* Ряд из двух карточек статуса плюс широкая карточка под ними.
        Раньше эти три жили в сетке из трёх колонок: два обычных блока вставали в ряд,
        третий занимал две колонки и переносился на новую строку, оставляя дыру справа. */
@@ -270,6 +377,21 @@
      есть Chrome и работает Lighthouse: на серверных скриптах uCoz браузера нет.
      Лендинг только шлёт запрос, CORS на сервисе открыт. */
   window.SEO_AUDIT_API = 'https://109-172-8-16.sslip.io/seo/api/audit';
+
+  /*
+   * Тема применяется до отрисовки страницы, поэтому этот кусок стоит в head, а не внизу.
+   * Если ставить её после загрузки, человек с выбранной тёмной темой на мгновение видит
+   * белую вспышку. Три состояния: выбрана тёмная, выбрана светлая, ничего не выбрано и
+   * решает система.
+   */
+  try {
+    var saved = localStorage.getItem('seo-audit-theme');
+    if (saved === 'dark' || saved === 'light') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) {
+    /* Приватный режим и запрет на хранение данных: тогда просто решает система. */
+  }
   </script>
 </head>
 <body>
@@ -280,62 +402,61 @@
           <img src="https://logo.ucoz.com/LOGOBlack.png" alt="uCoz">
           <span>SEO Audit & Fix MCP</span>
         </a>
+        <!-- Было восемь ссылок, включая «MVP» и «Approve»: страница с одним действием
+             не нуждается в меню из восьми пунктов, а половина слов человеку незнакома.
+             Осталось три вопроса, которые он действительно задаёт. -->
         <div class="navlinks">
           <a href="#check">Проверить сайт</a>
-          <a href="#modes">Что нужно</a>
-          <a href="#download">Скачать</a>
-          <a href="#idea">MVP</a>
-          <a href="#report">Отчет</a>
-          <a href="#install">Установка</a>
-          <a href="#safety">Approve</a>
-          <a href="#workflow">Как работает</a>
+          <a href="#report">Что в отчёте</a>
+          <a href="#install">Для разработчиков</a>
+          <button class="theme-toggle" id="theme-toggle" type="button"
+                  aria-label="Переключить тёмную тему" title="Светлая или тёмная тема">
+            <span class="theme-icon" aria-hidden="true">☀</span>
+          </button>
         </div>
       </nav>
     </div>
   </header>
 
   <main>
-    <div class="wrap hero">
-      <div>
-        <div class="eyebrow">Проверка сайта и MCP</div>
-        <h1>SEO-аудит сайта без ручной рутины</h1>
-        <p class="lead">Проверьте сайт прямо здесь, без установки и регистрации. Ключи и подключения нужны только на втором шаге, если вы захотите, чтобы найденное правилось автоматически прямо в шаблонах сайта.</p>
-        <div class="actions">
-          <a class="btn primary" href="#check">Проверить свой сайт</a>
-          <a class="btn" href="#install">Подключить MCP</a>
-          <a class="btn" href="https://github.com/linuxsoid/ucoz-seo-audit-fix#readme" target="_blank" rel="noopener">Открыть инструкцию</a>
-        </div>
-      </div>
-      <div class="report" aria-label="Пример отчета">
-        <div class="report-top"><span>Пример отчёта</span><span>1 страница</span></div>
-        <div class="score">
-          <div><b>8</b>критичных</div>
-          <div><b>5</b>рекомендаций</div>
-          <div><b>9</b>проверок OK</div>
-        </div>
-        <div class="row"><span class="tag red">Страница</span><span>Замечания сгруппированы по публичному URL</span></div>
-        <div class="row"><span class="tag">Шаблон</span><span>Показывается название шаблона и module_id/template_id</span></div>
-        <div class="row"><span class="tag">Approve</span><span>Перед записью нужен backup, diff и явное подтверждение</span></div>
-      </div>
-    </div>
-
-
-    <section id="check">
-      <div class="wrap">
-        <h2>Проверить сайт прямо сейчас</h2>
-        <p class="lead">Введите адрес. Проверим индексируемость, сертификат, мета-теги, заголовки, разметку,
-          картинки без alt, robots, sitemap, перелинковку, контакты и счётчик аналитики.
-          Установка и регистрация не нужны, сайт при проверке только читается и не меняется.</p>
+    <!-- Поле ввода перенесено на первый экран и стало главным элементом страницы.
+         Раньше первый экран занимали три кнопки и картинка с примером отчёта, а само
+         поле лежало отдельной секцией ниже сгиба: человек приходил проверить сайт и
+         сначала должен был догадаться, куда нажать. -->
+    <section id="check" class="hero">
+      <div class="wrap hero-inner">
+        <h1>Узнайте, что мешает вашему сайту<br>показываться в поиске</h1>
+        <p class="lead">Вставьте адрес сайта. Через минуту вы увидите список проблем понятными
+          словами: что сломано, чем это грозит и что делать. Бесплатно, без регистрации,
+          сайт мы только читаем и ничего в нём не меняем.</p>
 
         <form class="check-form" id="check-form">
-          <input id="check-url" type="text" inputmode="url" placeholder="mysite.ucoz.net"
-                 aria-label="Адрес сайта" autocomplete="url" required>
-          <button id="check-btn" type="submit">Проверить</button>
+          <label class="check-label" for="check-url">Адрес вашего сайта</label>
+          <div class="check-row">
+            <input id="check-url" type="text" inputmode="url" placeholder="mysite.ru"
+                   autocomplete="url" required>
+            <button id="check-btn" type="submit">Проверить сайт</button>
+          </div>
         </form>
-        <p class="check-note">Проверяем до 8 страниц, без установки и без ключей. Lighthouse и проверка в
-          браузере доступны здесь же кнопкой ниже. Обход большего числа страниц есть в MCP-режиме.</p>
+
+        <ul class="hero-facts">
+          <li>Работает с любым сайтом, не только на uCoz</li>
+          <li>Смотрим до 8 страниц и запускаем настоящий браузер</li>
+          <li>Отчёт можно показать клиенту или отдать своему ИИ</li>
+        </ul>
 
         <div class="check-out" id="check-out"></div>
+      </div>
+    </section>
+
+    <section id="steps">
+      <div class="wrap">
+        <h2>Как это работает</h2>
+        <ol class="steps-3">
+          <li><b>Вставляете адрес</b><span>Ничего скачивать и настраивать не нужно.</span></li>
+          <li><b>Ждёте около минуты</b><span>Мы читаем страницы и открываем сайт в настоящем браузере, как это делает поисковик.</span></li>
+          <li><b>Читаете отчёт</b><span>Проблемы в порядке важности, с объяснением, чем каждая грозит.</span></li>
+        </ol>
       </div>
     </section>
 
@@ -489,10 +610,16 @@
     <section id="install">
       <div class="wrap">
         <h2>Установка</h2>
-        <p class="lead">Подключение занимает одну строку. Скачивать и устанавливать нечего:
-          сервис работает на нашей стороне, поэтому у вас всегда свежая версия.</p>
+        <p class="lead">Этот раздел нужен, только если вы работаете в редакторе кода и хотите
+          запускать проверку оттуда. Для обычной проверки на этой странице ничего
+          устанавливать не надо.</p>
+        <p class="lead">Подключение занимает одну строку. Скачивать нечего: сервис работает
+          на нашей стороне, поэтому у вас всегда свежая версия.</p>
 
-        <div class="grid">
+        <!-- Две колонки вместо трёх. В колонке шириной в треть экрана команда не влезала
+             в строку и переносилась посреди адреса: Юра справедливо сказал, что переносы
+             выглядят неопрятно. В половине ширины команда влезает целиком. -->
+        <div class="grid grid-2">
           <article class="card">
             <h3>Claude Code</h3>
 <pre><code>claude mcp add --transport http \
@@ -611,6 +738,10 @@ npm install --omit=dev</code></pre>
       </div>
     </section>
   </main>
+
+  <!-- Кнопка «наверх». Появляется, когда человек ушёл вниз, и ведёт к полю ввода, а не
+       к самому верху страницы: наверх он идёт затем, чтобы проверить ещё один сайт. -->
+  <a class="to-top" id="to-top" href="#check" title="К проверке сайта" aria-label="Наверх, к проверке сайта" hidden>↑</a>
 
   <footer>
     <div class="wrap">uCoz SEO Audit & Fix MCP · MVP для безопасного SEO-аудита и повторной проверки. <span style="display:inline-block;margin-left:10px">Используются технологии <a href="https://www.ucoz.ru/"><b>uCoz</b></a></span> <span style="display:inline-block;margin-left:10px">Связь: <a href="mailto:iginov@ucoz-team.net">iginov@ucoz-team.net</a>, <a href="https://github.com/linuxsoid/ucoz-seo-audit-fix" target="_blank" rel="noopener">исходники на GitHub</a></span></div>
@@ -845,36 +976,70 @@ npm install --omit=dev</code></pre>
      * Список файлов приходит от сервера, фронтенд его не выдумывает: так набор кнопок
      * и содержимое архива не могут разойтись.
      */
+    /**
+     * Итог проверки: вердикт словами и два действия.
+     *
+     * Раньше здесь было десять кнопок с именами файлов. Человеку без техбэкграунда это
+     * задача на разбор: он не знает, что такое HAR и лог консоли, и не понимает, какой из
+     * десяти файлов ему нужен. Теперь выбора нет: посмотреть отчёт или забрать всё архивом.
+     * Что лежит внутри архива, объяснено в самом архиве.
+     */
     function showDownloads(data, quick, partial) {
-      var files = (data && data.files) || [];
-      var sid = (data && data.sessionId) || (quick && quick.sessionId);
-      if (!files.length || !sid) return;
-
-      var note = partial
-        ? 'Браузерная часть не отработала, поэтому в отчёте только результаты первой части.'
-        : 'В отчёте всё: проверка страниц, Lighthouse и браузерная диагностика.';
+      var res = data && data.result;
+      if (!res) return;
 
       var api = DEEP_API.replace(/\/api\/deep$/, '');
+      var view = api + '/' + res.viewPath;
+      var zip = api + '/' + res.zipPath;
 
-      var rows = files.map(function (f) {
-        return '<a class="btn" href="' + api + '/api/file?id=' + encodeURIComponent(sid) +
-          '&name=' + encodeURIComponent(f.name) + '">' + escapeHtml(f.title || f.name) +
-          ' <span class="check-note">' + humanSize(f.size) + '</span></a>';
-      }).join('');
+      var sum = (data && data.summary) || (quick && quick.summary) || {};
+      var crit = Number(sum.critical || 0);
+      var rec = Number(sum.recommended || 0);
 
-      var all = '<a class="btn primary" href="' + api + '/api/bundle?id=' + encodeURIComponent(sid) +
-        '">Скачать всё одним архивом</a>';
+      var verdict = crit
+        ? 'Нашли ' + crit + ' ' + plural(crit, 'проблему', 'проблемы', 'проблем') + ', ' +
+          plural(crit, 'которая мешает', 'которые мешают', 'которые мешают') + ' поиску'
+        : (rec
+          ? 'Ничего сломанного не нашли'
+          : 'С сайтом всё в порядке');
 
-      var html = '<div class="check-msg" style="margin-top:14px"><b>Отчёт готов</b>' +
-        '<p class="check-note" style="margin:6px 0 10px">' + note +
-        ' Файлы те же, что вы забрали бы из DevTools руками: HAR по сети, лог консоли, ' +
-        'официальный отчёт Lighthouse и скриншот. Плюс наши отчёты для человека и для ИИ.</p>' +
-        '<div class="dl-row" style="margin-bottom:10px">' + all + '</div>' +
-        '<div class="dl-row">' + rows + '</div></div>';
+      var hint = crit
+        ? 'Начните с них: они влияют на то, попадёт ли сайт в поиск и как он там выглядит.'
+        : (rec
+          ? 'Осталось ' + rec + ' ' + plural(rec, 'улучшение', 'улучшения', 'улучшений') +
+            ': они не срочные, но каждое немного добавляет сайту видимости.'
+          : 'Проверка не нашла ни проблем, ни поводов для улучшений.');
+
+      if (partial) {
+        hint += ' Браузерная часть не отработала, поэтому в отчёте только результаты первой части.';
+      }
+
+      var html = '<div class="done">' +
+        '<h3>' + escapeHtml(verdict) + '</h3>' +
+        '<p>' + escapeHtml(hint) + ' Отчёт открывается прямо здесь, скачивать для этого ничего не нужно.</p>' +
+        '<div class="done-actions">' +
+          '<a class="btn primary" href="' + view + '" target="_blank" rel="noopener">Посмотреть отчёт</a>' +
+          '<a class="btn" href="' + zip + '">Скачать всё архивом' +
+            (res.bytes ? ' <span class="check-note">' + humanSize(res.bytes) + '</span>' : '') +
+          '</a>' +
+        '</div>' +
+        '<p class="check-note" style="margin:12px 0 0">Отчёт и архив живут ' + (res.livesMinutes || 15) +
+        ' минут, потом удаляются с сервера. Если нужно сохранить, скачайте архив.</p>' +
+        '</div>';
 
       var host = document.createElement('div');
       host.innerHTML = html;
       out.appendChild(host);
+    }
+
+    /** Русские окончания. Без них выходит «3 проблема» и «5 улучшения». */
+    function plural(n, one, few, many) {
+      var mod100 = Math.abs(n) % 100;
+      var mod10 = mod100 % 10;
+      if (mod100 >= 11 && mod100 <= 14) return many;
+      if (mod10 === 1) return one;
+      if (mod10 >= 2 && mod10 <= 4) return few;
+      return many;
     }
 
     /** Размер файла человеческими словами, чтобы было видно, что качаешь. */
@@ -977,6 +1142,124 @@ npm install --omit=dev</code></pre>
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
       });
     }
+
+    // ---------------------------------------------------------------- оформление страницы
+
+    /**
+     * Переключатель темы.
+     *
+     * Иконка показывает, что произойдёт по нажатию, а не то, что сейчас: в светлой теме
+     * месяц («включить тёмную»), в тёмной солнце («включить светлую»). Обратный вариант
+     * читается ровно наоборот и путает.
+     *
+     * Выбор запоминаем. Если человек ничего не выбирал, тему определяет система, и это
+     * состояние тоже надо уметь показать: тогда иконка соответствует текущей теме системы.
+     */
+    (function initTheme() {
+      var toggle = document.getElementById('theme-toggle');
+      if (!toggle) return;
+      var icon = toggle.querySelector('.theme-icon');
+      var root = document.documentElement;
+
+      function darkNow() {
+        var attr = root.getAttribute('data-theme');
+        if (attr === 'dark') return true;
+        if (attr === 'light') return false;
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+
+      function paint() {
+        var dark = darkNow();
+        icon.textContent = dark ? '☀' : '☾';
+        toggle.setAttribute('aria-label', dark ? 'Включить светлую тему' : 'Включить тёмную тему');
+        toggle.setAttribute('title', dark ? 'Включить светлую тему' : 'Включить тёмную тему');
+      }
+
+      toggle.addEventListener('click', function () {
+        var next = darkNow() ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('seo-audit-theme', next); } catch (e) { /* приватный режим */ }
+        paint();
+      });
+
+      // Если человек не выбирал тему сам, следим за настройкой системы: она меняется
+      // по расписанию, и страница не должна оставаться светлой в тёмном окружении.
+      if (window.matchMedia) {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        var onChange = function () { if (!root.getAttribute('data-theme')) paint(); };
+        if (mq.addEventListener) { mq.addEventListener('change', onChange); }
+        else if (mq.addListener) { mq.addListener(onChange); }
+      }
+
+      paint();
+    })();
+
+    /** Кнопка «наверх». Показываем, только когда человек действительно ушёл вниз. */
+    (function initToTop() {
+      var btn = document.getElementById('to-top');
+      if (!btn) return;
+      var shown = false;
+      function update() {
+        var need = window.scrollY > 700;
+        if (need !== shown) { shown = need; btn.hidden = !need; }
+      }
+      window.addEventListener('scroll', update, { passive: true });
+      update();
+    })();
+
+    /**
+     * Кнопки «копировать» у блоков кода.
+     *
+     * Просил Юра: выделять команду мышью в узкой карточке неудобно, а с переносом строк
+     * легко захватить лишнее. Кнопка добавляется скриптом, а не руками в разметке: блоков
+     * кода семь, и держать разметку кнопки в семи местах значит однажды забыть про восьмой.
+     */
+    (function initCopyButtons() {
+      var blocks = document.querySelectorAll('#install pre, .code-box pre');
+      Array.prototype.forEach.call(blocks, function (pre) {
+        var box = pre.parentNode;
+        if (!box.classList.contains('code-box')) {
+          var wrap = document.createElement('div');
+          wrap.className = 'code-box';
+          box.insertBefore(wrap, pre);
+          wrap.appendChild(pre);
+          box = wrap;
+        }
+        if (box.querySelector('.code-copy')) return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'code-copy';
+        btn.textContent = 'Копировать';
+        btn.addEventListener('click', function () {
+          var text = pre.textContent;
+          var done = function () {
+            btn.textContent = 'Скопировано';
+            setTimeout(function () { btn.textContent = 'Копировать'; }, 1600);
+          };
+          // Современный способ работает только на защищённом соединении. Старый через
+          // скрытое поле нужен для локальной отладки по http, иначе кнопка там мертва.
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, fallback);
+          } else {
+            fallback();
+          }
+          function fallback() {
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            try { document.execCommand('copy'); done(); }
+            catch (e) { btn.textContent = 'Не вышло, выделите вручную'; }
+            document.body.removeChild(area);
+          }
+        });
+        box.appendChild(btn);
+      });
+    })();
   })();
   </script>
 </body>

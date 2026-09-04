@@ -113,6 +113,9 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && route === 'bundle') {
       return sendBundle(res, url.searchParams.get('id'));
     }
+    if (req.method === 'GET' && route === 'view') {
+      return sendReportPage(res, url.searchParams.get('id'));
+    }
     // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
     // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
     if (route === 'mcp') {
@@ -140,22 +143,26 @@ function buildArtifacts(result, reports, lighthouse, browser) {
   const base = `${host}-${stamp}`;
   const files = [];
 
+  // Папки внутри архива. Десять файлов вперемешку это задача на разбор, которую человек
+  // решать не должен: имена вроде HAR и console.log ему ничего не говорят. Раскладываем
+  // по тому, КОМУ файл нужен, и в каждой папке кладём читалку с объяснением.
+  const HUMAN = 'dlya-cheloveka/';
+  const AI = 'dlya-ii/';
+  const SOURCE = 'ishodnye-dannye/';
+
   const add = (name, data, type, title) => {
     if (data === null || data === undefined || data === '') return;
     files.push({ name, data, type, title });
   };
 
   if (reports) {
-    add(`seo-otchet-${base}.md`, reports.humanMd, 'text/markdown', 'Отчёт для человека, MD');
-    add(`seo-otchet-${base}.html`, reports.humanHtml, 'text/html', 'Отчёт для человека, HTML');
-    add(`seo-agent-ru-${base}.md`, reports.agentMdRu, 'text/markdown', 'Отчёт для ИИ, RU');
-    add(`seo-agent-en-${base}.md`, reports.agentMdEn, 'text/markdown', 'Отчёт для ИИ, EN');
+    add(`${HUMAN}otchet-${base}.html`, reports.humanHtml, 'text/html', 'Отчёт, открыть двойным щелчком');
+    add(`${HUMAN}otchet-${base}.md`, reports.humanMd, 'text/markdown', 'Тот же отчёт текстом');
+    add(`${AI}zadanie-agentu-ru-${base}.md`, reports.agentMdRu, 'text/markdown', 'Задание агенту, русский');
+    add(`${AI}zadanie-agentu-en-${base}.md`, reports.agentMdEn, 'text/markdown', 'Задание агенту, английский');
   }
 
-  // Машинные данные без текстов отчётов: те же сведения во второй раз только раздули бы файл.
-  const machine = { ...result };
-  delete machine.pages;
-  add(`seo-audit-${base}.json`, JSON.stringify({
+  add(`${AI}dannye-proverki-${base}.json`, JSON.stringify({
     url: result.startUrl,
     scannedAt: result.scannedAt,
     summary: result.summary,
@@ -164,21 +171,120 @@ function buildArtifacts(result, reports, lighthouse, browser) {
   }, null, 2), 'application/json', 'Данные проверки, JSON');
 
   if (browser?.available) {
-    add(`${base}.har`, JSON.stringify(browser.har, null, 2), 'application/json', 'Сетевые запросы, HAR');
-    add(`console-${base}.log`, browser.consoleLog, 'text/plain', 'Лог консоли браузера');
+    add(`${SOURCE}set-${base}.har`, JSON.stringify(browser.har, null, 2), 'application/json', 'Сетевые запросы, HAR');
+    add(`${SOURCE}konsol-${base}.log`, browser.consoleLog, 'text/plain', 'Лог консоли браузера');
     if (browser.screenshotBase64) {
-      add(`screenshot-${base}.jpg`, Buffer.from(browser.screenshotBase64, 'base64'), 'image/jpeg', 'Скриншот страницы');
+      add(`${SOURCE}skrinshot-${base}.jpg`, Buffer.from(browser.screenshotBase64, 'base64'), 'image/jpeg', 'Скриншот страницы');
     }
   }
 
   if (lighthouse?.available) {
-    add(`lighthouse-${base}.html`, lighthouse.rawHtml, 'text/html', 'Официальный отчёт Lighthouse');
-    add(`lighthouse-${base}.json`, lighthouse.rawJson, 'application/json', 'Lighthouse, JSON');
+    add(`${SOURCE}lighthouse-${base}.html`, lighthouse.rawHtml, 'text/html', 'Отчёт Lighthouse');
+    add(`${SOURCE}lighthouse-${base}.json`, lighthouse.rawJson, 'application/json', 'Lighthouse, JSON');
   }
+
+  // Читалки. Без них человек открывает архив и видит папку «ishodnye-dannye» с файлом
+  // .har, о котором не знает ничего. Один короткий текст снимает этот вопрос.
+  addReadme(files, HUMAN, [
+    'Что здесь',
+    '',
+    'otchet-*.html это главный файл. Откройте его двойным щелчком, он покажется в браузере.',
+    'Читать по порядку: сначала блок «что делать первым», потом остальное.',
+    '',
+    'otchet-*.md это тот же отчёт обычным текстом, если удобнее читать в редакторе или',
+    'вставить в переписку.',
+    '',
+    'Правок в ваш сайт мы не вносили, только читали страницы.'
+  ]);
+  addReadme(files, AI, [
+    'Что здесь',
+    '',
+    'Эти файлы нужны, если проблемы будет править ИИ-агент: Claude, ChatGPT, Cursor и другие.',
+    '',
+    'zadanie-agentu-ru-*.md отдайте агенту целиком. Внутри каждая проблема названа машинным',
+    'кодом, под ней точные адреса страниц, а сверху инструкция, что с этим делать.',
+    'Пересказывать своими словами не надо.',
+    '',
+    'zadanie-agentu-en-*.md то же самое по-английски.',
+    '',
+    'dannye-proverki-*.json те же выводы в машинном виде, для своих скриптов.'
+  ]);
+  addReadme(files, SOURCE, [
+    'Что здесь',
+    '',
+    'Сырые данные, снятые во время проверки. Читать их не обязательно: все выводы уже',
+    'в отчёте. Они лежат здесь, чтобы их можно было передать разработчику.',
+    '',
+    'set-*.har запись всех сетевых запросов страницы. Открывается в DevTools браузера:',
+    'вкладка Network, кнопка импорта. Видно, что грузилось, сколько весило и что упало.',
+    '',
+    'konsol-*.log сообщения и ошибки, которые страница вывела в консоль браузера.',
+    '',
+    'skrinshot-*.jpg как страница выглядела в момент проверки, целиком.',
+    '',
+    'lighthouse-*.html официальный отчёт Lighthouse от Google, открывается двойным щелчком.',
+    'lighthouse-*.json он же в машинном виде.'
+  ]);
 
   // Имя архива отдаём вместе с файлами. Восстанавливать его потом разбором чужого имени
   // это лишний способ ошибиться, что уже и случилось: регулярка прихватывала кусок слова.
   return { files, bundleName: `seo-audit-${base}.zip` };
+}
+
+/**
+ * Кладёт в папку архива файл-читалку.
+ *
+ * Пишем только если в папке вообще что-то есть: пустая папка с объяснением, чего в ней
+ * нет, выглядит глупее отсутствующей папки.
+ */
+function addReadme(files, folder, lines) {
+  if (!files.some((f) => f.name.startsWith(folder))) return;
+  files.push({
+    name: `${folder}CHITAT-SNACHALA.txt`,
+    data: lines.join('\r\n'),
+    type: 'text/plain',
+    title: 'Что в этой папке'
+  });
+}
+
+/**
+ * Что сказать клиенту про готовый результат: куда смотреть, что скачивать и сколько это
+ * весит. Пути относительные: приложение может быть смонтировано по любому префиксу, и
+ * абсолютный путь на серверных скриптах uCoz привёл бы в никуда.
+ */
+function bundleInfo(id) {
+  const bundle = recallArtifacts(id);
+  if (!bundle?.files?.length) return null;
+  const q = encodeURIComponent(String(id));
+  const bytes = bundle.files.reduce(
+    (sum, f) => sum + Buffer.byteLength(Buffer.isBuffer(f.data) ? f.data : String(f.data)),
+    0
+  );
+  return {
+    viewPath: `api/view?id=${q}`,
+    zipPath: `api/bundle?id=${q}`,
+    zipName: bundle.bundleName,
+    files: bundle.files.length,
+    bytes,
+    // Через сколько результат исчезнет. Это надо сказать вслух: человек уйдёт читать
+    // отчёт, вернётся через час и не поймёт, почему ссылка перестала работать.
+    livesMinutes: Math.round(SESSION_TTL_MS / 60000)
+  };
+}
+
+/**
+ * Один ли это сайт. Сравниваем по origin: схема, домен и порт.
+ *
+ * Домен с www и без него считаем разными намеренно. Для поисковика это разные адреса, и
+ * проверка одного ничего не говорит о другом: у них бывают разные редиректы, разные
+ * canonical и разные сертификаты.
+ */
+function sameSite(a, b) {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
 }
 
 function hostOfUrl(url) {
@@ -219,12 +325,113 @@ function sendArtifact(res, id, name) {
   res.end(body);
 }
 
+/**
+ * Отдаёт отчёт живой страницей.
+ *
+ * Зачем отдельный маршрут, если тот же HTML лежит в архиве. Чтобы посмотреть результат,
+ * человек не должен скачивать файл, искать его в папке загрузок и открывать. Он нажимает
+ * кнопку и читает. Скачивание остаётся, но становится вторым действием, а не первым.
+ *
+ * Скрипты на этой странице запрещены заголовком CSP. Внутрь отчёта попадают заголовки и
+ * адреса с чужого сайта: экранирование мы проверяем тестами, но одного слоя защиты для
+ * страницы на нашем домене мало. Поэтому и кнопка «наверх» здесь обычная ссылка на якорь,
+ * а не скрипт: с запретом скриптов это единственный способ, который точно работает.
+ */
+function sendReportPage(res, id) {
+  const bundle = recallArtifacts(id);
+  const file = bundle?.files?.find((f) => f.name.startsWith('dlya-cheloveka/') && f.name.endsWith('.html'));
+  if (!file) {
+    return sendHtmlPage(res, 404, expiredPage());
+  }
+
+  const body = withReportActions(String(file.data), id, bundle.bundleName);
+  return sendHtmlPage(res, 200, body);
+}
+
+function sendHtmlPage(res, status, html) {
+  const buf = Buffer.from(html, 'utf8');
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': buf.length,
+    'cache-control': 'no-store',
+    // Ни одного скрипта, ни одного внешнего ресурса: только наша разметка и наши стили.
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'",
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer'
+  });
+  res.end(buf);
+}
+
+/** Полоса действий сверху и снизу отчёта плюс возврат наверх. */
+function withReportActions(html, id, bundleName) {
+  const zip = `api/bundle?id=${encodeURIComponent(id)}`;
+  const css = `
+<style>
+  .rp-bar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; justify-content: space-between;
+    padding: 12px 18px; margin: 0 0 22px; background: #101828; color: #f8fafc; }
+  .rp-bar-bottom { position: static; margin: 30px 0 0; border-radius: 10px; }
+  .rp-bar b { font-size: 15px; }
+  .rp-bar .rp-note { color: #cbd5e1; font-size: 13px; }
+  .rp-btn { display: inline-block; padding: 10px 16px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; text-decoration: none; background: #2563eb; color: #fff; }
+  .rp-btn.rp-ghost { background: transparent; color: #f8fafc; border: 1px solid #475569; }
+  .rp-top { position: fixed; right: 18px; bottom: 18px; z-index: 20; width: 46px; height: 46px;
+    border-radius: 50%; background: #101828; color: #fff; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  @media print { .rp-bar, .rp-top { display: none; } }
+</style>`;
+
+  const bar = (bottom) => `
+<div class="rp-bar${bottom ? ' rp-bar-bottom' : ''}">
+  <div><b>Отчёт по вашему сайту</b>
+    <div class="rp-note">${bottom ? 'Забрать всё в одном архиве, чтобы не потерять' : 'Страница живёт 15 минут. Заберите архив, если нужно сохранить'}</div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <a class="rp-btn" href="${zip}" download="${encodeURIComponent(bundleName)}">Скачать результат</a>
+    ${bottom ? '<a class="rp-btn rp-ghost" href="#rp-top">Наверх</a>' : ''}
+  </div>
+</div>`;
+
+  let out = html.replace('</head>', `${css}</head>`);
+  // Якорь ставим первым элементом тела, к нему ведёт круглая кнопка в углу.
+  out = out.replace(/<body([^>]*)>/i, (m, attrs) => `<body${attrs}><span id="rp-top"></span>${bar(false)}`);
+  out = out.replace('</body>', `${bar(true)}<a class="rp-top" href="#rp-top" title="Наверх" aria-label="Наверх">&#8593;</a></body>`);
+  return out;
+}
+
+function expiredPage() {
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Отчёт больше недоступен</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+font:16px/1.6 system-ui,Segoe UI,Roboto,sans-serif;background:#faf9f7;color:#1f2430;padding:24px}
+.box{max-width:460px;text-align:center}h1{font-size:22px;margin:0 0 10px}
+p{color:#5b6472;margin:0 0 18px}a{display:inline-block;padding:11px 18px;border-radius:8px;
+background:#2563eb;color:#fff;text-decoration:none;font-weight:600}</style></head>
+<body><div class="box"><h1>Отчёт больше недоступен</h1>
+<p>Результаты проверки хранятся 15 минут, чтобы не занимать место на сервере. Запустите
+проверку заново, это займёт около минуты.</p>
+<a href="https://seoaudit.ucoz.net/#check">Проверить сайт заново</a></div></body></html>`;
+}
+
 function sendBundle(res, id) {
   const bundle = recallArtifacts(id);
   if (!bundle?.files?.length) {
     return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
   }
-  const zip = createZip(bundle.files.map((f) => ({ name: f.name, data: f.data })));
+
+  // Архив собираем один раз на сессию и держим готовым.
+  //
+  // Сжатие здесь синхронное, а внутри лежит скриншот почти на мегабайт. Пересобирать
+  // архив на каждый запрос значит блокировать единственный поток Node на всё время сжатия,
+  // и достаточно было дёргать эту ссылку в цикле, чтобы сервис перестал отвечать всем
+  // остальным. Ссылка публичная, id известен любому, кто её открыл.
+  if (!bundle.zip) {
+    bundle.zip = createZip(bundle.files.map((f) => ({ name: f.name, data: f.data })));
+  }
+  const zip = bundle.zip;
   const name = bundle.bundleName;
   res.writeHead(200, {
     'content-type': 'application/zip',
@@ -247,7 +454,19 @@ function sendBundle(res, id) {
  * это публично доступные данные о публичном сайте, и через четверть часа они протухают.
  */
 const SESSION_TTL_MS = 15 * 60 * 1000;
-const SESSION_MAX = 50;
+/**
+ * Сколько результатов держим в памяти одновременно.
+ *
+ * Считаем по худшему случаю: в одной сессии лежат отчёты, скриншот почти на мегабайт,
+ * отчёт Lighthouse в двух форматах на полтора мегабайта и готовый архив. Это около двух
+ * с половиной мегабайт на сессию, то есть при двадцати сессиях примерно пятьдесят.
+ * Служба ограничена MemoryHigh в 900 МБ, но живёт на машине, где свободной памяти
+ * немного, поэтому запас берём с большим отрывом.
+ *
+ * Двадцати хватает: браузерный слот один, проверка занимает около минуты, и больше
+ * десятка результатов за пятнадцатиминутное окно жизни сессии просто не появится.
+ */
+const SESSION_MAX = 20;
 const sessions = new Map();
 
 function rememberAudit(result) {
@@ -304,6 +523,9 @@ function matchRoute(pathname) {
   if (path === '/api/deep' || path.endsWith('/api/deep')) return 'deep';
   if (path === '/api/file' || path.endsWith('/api/file')) return 'file';
   if (path === '/api/bundle' || path.endsWith('/api/bundle')) return 'bundle';
+  // Отчёт живой страницей. Человеку не нужно скачивать html и искать его в загрузках,
+  // чтобы просто посмотреть результат: он нажимает кнопку и читает.
+  if (path === '/api/view' || path.endsWith('/api/view')) return 'view';
   if (path === '/mcp' || path.endsWith('/mcp')) return 'mcp';
   return 'page';
 }
@@ -396,6 +618,20 @@ async function handleDeepAudit(req, res) {
 
   const formFactor = body?.formFactor === 'desktop' ? 'desktop' : 'mobile';
 
+  // Сессия должна относиться к тому же сайту, что и запрошенный адрес.
+  //
+  // Раньше url и sessionId принимались независимо друг от друга. Ничто не мешало прислать
+  // адрес одного сайта с идентификатором проверки другого, и тогда в один отчёт склеивались
+  // страницы первого сайта с оценками Lighthouse и браузерной диагностикой второго. Отчёт
+  // при этом выглядел совершенно нормально, и понять по нему, что там смешаны два сайта,
+  // было нельзя. Проверять надо здесь, до минуты работы браузера, а не после.
+  const session = recallAudit(body?.sessionId);
+  if (body?.sessionId && session && !sameSite(session.startUrl, target)) {
+    return sendJson(res, 400, {
+      error: 'Идентификатор проверки относится к другому сайту. Запустите проверку заново.'
+    });
+  }
+
   try {
     // Запускаем последовательно, а не параллельно: слот браузера один, и параллельный
     // запуск просто заблокировал бы сам себя на ожидании очереди.
@@ -442,8 +678,10 @@ async function handleDeepAudit(req, res) {
       formFactor,
       summary: base?.summary ?? null,
       reports,
-      // Только описание файлов, без содержимого: сами файлы качаются по ссылке.
-      files: base ? (recallArtifacts(body?.sessionId)?.files ?? []).map((f) => ({ name: f.name, title: f.title, size: Buffer.byteLength(Buffer.isBuffer(f.data) ? f.data : String(f.data)) })) : [],
+      // Человеку предлагаем два действия, а не выбор из десяти файлов: посмотреть отчёт
+      // страницей и забрать всё одним архивом. Что лежит внутри архива, объяснено в самом
+      // архиве, а не кнопками на странице.
+      result: base ? bundleInfo(body?.sessionId) : null,
       sessionId: body?.sessionId ?? null,
       lighthouse: lighthouse?.available ? {
         categories: lighthouse.summary?.categories ?? [],
