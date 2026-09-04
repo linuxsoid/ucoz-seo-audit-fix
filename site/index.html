@@ -31,6 +31,11 @@
        пришлось бы поддерживать в каждом блоке отдельно. */
     :root {
       color-scheme: light;
+      --bad: var(--bad);
+      --crit-bg: #fbe6e2;
+      --crit-ink: #a83c2b;
+      --rec-bg: #fbf1dd;
+      --rec-ink: #8a5d10;
       --bg: #f7f4ee;
       --panel: #fffdfa;
       --ink: #1b2029;
@@ -68,6 +73,12 @@
       --dark-code-bg: #0f131a;
       --dark-header-bg: rgba(20, 22, 27, .92);
       --dark-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      --dark-bad: #ff8f7d;
+      --dark-crit-bg: #3a1f1b;
+      --dark-crit-ink: #ffab9b;
+      --dark-rec-bg: #33280f;
+      --dark-rec-ink: #ffd280;
+      --dark-code-ink: #edf2fb;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
@@ -78,6 +89,9 @@
         --warn: var(--dark-warn); --soft: var(--dark-soft); --green: var(--dark-green);
         --code-bg: var(--dark-code-bg); --header-bg: var(--dark-header-bg);
         --shadow: var(--dark-shadow);
+        --bad: var(--dark-bad); --crit-bg: var(--dark-crit-bg); --crit-ink: var(--dark-crit-ink);
+        --rec-bg: var(--dark-rec-bg); --rec-ink: var(--dark-rec-ink);
+        --code-ink: var(--dark-code-ink);
       }
     }
     :root[data-theme="dark"] {
@@ -88,6 +102,9 @@
       --warn: var(--dark-warn); --soft: var(--dark-soft); --green: var(--dark-green);
       --code-bg: var(--dark-code-bg); --header-bg: var(--dark-header-bg);
       --shadow: var(--dark-shadow);
+      --bad: var(--dark-bad); --crit-bg: var(--dark-crit-bg); --crit-ink: var(--dark-crit-ink);
+      --rec-bg: var(--dark-rec-bg); --rec-ink: var(--dark-rec-ink);
+      --code-ink: var(--dark-code-ink);
     }
     * { box-sizing: border-box; }
     body {
@@ -101,7 +118,7 @@
     .wrap { max-width: 1160px; margin: 0 auto; padding: 0 22px; }
     header {
       border-bottom: 1px solid var(--line);
-      background: rgba(255, 253, 250, .92);
+      background: var(--header-bg);
       position: sticky;
       top: 0;
       z-index: 5;
@@ -168,7 +185,7 @@
       text-decoration: none;
       font-weight: 700;
     }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     section { padding: 34px 0; }
     h2 { font-size: 30px; margin: 0 0 18px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -185,12 +202,12 @@
     .wide { grid-column: span 2; }
     .mini-title { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; font-weight: 800; }
     .feature-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    .feature-list li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid #eee8de; }
+    .feature-list li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
     .feature-list strong { color: var(--ink); }
     .feature-list span { color: var(--muted); }
     .matrix { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: table; }
-    .matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid #eee8de; text-align: left; vertical-align: top; }
-    .matrix th { background: #f0ede7; font-size: 13px; text-transform: uppercase; color: #4c5564; }
+    .matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .matrix th { background: var(--soft); font-size: 13px; text-transform: uppercase; color: var(--muted); }
     .matrix tr:last-child td { border-bottom: 0; }
     .pillbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--panel); padding: 6px 10px; font-size: 13px; color: var(--muted); }
@@ -220,8 +237,8 @@
     pre {
       margin: 12px 0 0;
       padding: 14px;
-      background: #111827;
-      color: #edf2fb;
+      background: var(--code-bg);
+      color: var(--code-ink);
       border-radius: 8px;
       font-size: 13px;
       /* Команды и конфиги переносим по строкам, а не прячем в горизонтальную прокрутку.
@@ -235,7 +252,7 @@
     /* Адрес сервера внутри обычного текста тоже длинный и без пробелов: без разрешения
        переносить его по любому символу он упирался в край карточки и обрезался. */
     .card code, .card a, .step code, .step a { overflow-wrap: anywhere; }
-    .notice { background: var(--green); border-color: #c7eadb; }
+    .notice { background: var(--green); border-color: var(--line); }
     footer { padding: 30px 0 42px; color: var(--muted); }
     @media (max-width: 840px) {
       /* Меню в столбик, но переключатель темы остаётся в одной строке с логотипом:
@@ -287,6 +304,8 @@
     /* Кнопка «копировать» у блока кода. Просил Юра: команду выделять мышью в узкой
        карточке неудобно, а с переносом строк ещё и легко захватить лишнее. */
     .code-box { position: relative; }
+    /* Цвета кнопки зашиты сознательно: она лежит на блоке кода, а он тёмный в обеих
+       темах. С переменными кнопка стала бы светлой на светлом в светлой теме. */
     .code-copy { position: absolute; top: 8px; right: 8px; padding: 5px 11px; font: inherit;
       font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 7px;
       border: 1px solid #3b4657; background: #1f2937; color: #dbe6f7; }
@@ -309,14 +328,14 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .check-msg { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
       background: var(--panel); }
-    .check-msg.bad { border-color: #c0503c; color: #c0503c; }
+    .check-msg.bad { border-color: var(--bad); color: var(--bad); }
     .check-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 12px; margin-bottom: 14px; }
     .check-scores div { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
       background: var(--panel); }
     .check-scores b { display: block; font-size: 30px; line-height: 1.1; }
     .check-scores span { color: var(--muted); font-size: 13px; }
-    .check-scores .crit b { color: #c0503c; }
+    .check-scores .crit b { color: var(--bad); }
     .check-scores .rec b { color: var(--warn); }
     .check-scores .ok b { color: var(--accent-2); }
     .check-list { list-style: none; padding: 0; margin: 0; }
@@ -324,8 +343,8 @@
       margin-bottom: 10px; background: var(--panel); }
     .check-list .sev { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 9px;
       border-radius: 999px; margin-right: 8px; }
-    .check-list .sev.critical { background: #fbe6e2; color: #a83c2b; }
-    .check-list .sev.recommended { background: #fbf1dd; color: #8a5d10; }
+    .check-list .sev.critical { background: var(--crit-bg); color: var(--crit-ink); }
+    .check-list .sev.recommended { background: var(--rec-bg); color: var(--rec-ink); }
     .check-list .why { color: var(--muted); font-size: 14px; margin-top: 6px; }
   
     /* Защита от горизонтальной прокрутки.
@@ -425,7 +444,7 @@
          сначала должен был догадаться, куда нажать. -->
     <section id="check" class="hero">
       <div class="wrap hero-inner">
-        <h1>Узнайте, что мешает вашему сайту<br>показываться в поиске</h1>
+        <h1>Узнайте, что мешает вашему сайту показываться в поиске</h1>
         <p class="lead">Вставьте адрес сайта. Через минуту вы увидите список проблем понятными
           словами: что сломано, чем это грозит и что делать. Бесплатно, без регистрации,
           сайт мы только читаем и ничего в нём не меняем.</p>

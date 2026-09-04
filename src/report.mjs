@@ -219,8 +219,8 @@ export function toHtml(result) {
       border-radius: 5px; padding: 2px 6px; color: var(--muted); }
 
     /* Кружок оценки: заливка по кругу до нужного процента, дырка в середине. */
-    .rings { display: flex; flex-wrap: wrap; gap: 12px; }
-    .ring-card { flex: 1 1 190px; background: var(--panel); border: 1px solid var(--line);
+    .rings { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+    .ring-card { background: var(--panel); border: 1px solid var(--line);
       border-radius: 10px; padding: 15px; display: flex; gap: 13px; align-items: flex-start; }
     .ring { flex: 0 0 auto; width: 54px; height: 54px; border-radius: 50%;
       background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--line) 0);
@@ -400,8 +400,8 @@ function jobCard(group, index) {
 function passBar(passed, total) {
   if (!total) return '';
   const percent = Math.round((passed / total) * 100);
-  return `<div class="bar" role="img" aria-label="Пройдено ${percent} процентов проверок"><i style="width:${percent}%"></i></div>
-  <p class="sub" style="margin:8px 0 0">Пройдено ${percent}% проверок из ${total}. Проверка смотрит на сам сайт: страницы, файлы и поведение в браузере.</p>`;
+  return `<div class="bar" role="img" aria-label="Без замечаний ${passed} проверок из ${total}"><i style="width:${percent}%"></i></div>
+  <p class="sub" style="margin:8px 0 0">${passed} из ${total} проверок ${plural(passed, 'прошла', 'прошли', 'прошли')} без замечаний. Проверка смотрит на сам сайт: страницы, файлы и поведение в настоящем браузере.</p>`;
 }
 
 /** Одинаковые сообщения пройденных проверок сворачиваем: их бывает по восемь подряд. */
