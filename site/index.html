@@ -176,6 +176,37 @@
       .matrix { display: block; overflow-x: auto; }
       .score { grid-template-columns: 1fr; }
     }
+  
+    /* Блок публичной проверки по URL */
+    .check-form { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 8px; }
+    .check-form input { flex: 1 1 320px; min-width: 0; padding: 14px 16px; font: inherit;
+      border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+    .check-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .check-form button { padding: 14px 26px; font: inherit; font-weight: 700; border: 0;
+      border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+    .check-form button[disabled] { opacity: .55; cursor: progress; }
+    .check-note { color: var(--muted); font-size: 14px; margin: 0; }
+    .check-out { margin-top: 20px; }
+    .check-msg { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--panel); }
+    .check-msg.bad { border-color: #c0503c; color: #c0503c; }
+    .check-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px; margin-bottom: 14px; }
+    .check-scores div { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+      background: var(--panel); }
+    .check-scores b { display: block; font-size: 30px; line-height: 1.1; }
+    .check-scores span { color: var(--muted); font-size: 13px; }
+    .check-scores .crit b { color: #c0503c; }
+    .check-scores .rec b { color: var(--warn); }
+    .check-scores .ok b { color: var(--accent-2); }
+    .check-list { list-style: none; padding: 0; margin: 0; }
+    .check-list li { border: 1px solid var(--line); border-radius: 10px; padding: 13px 16px;
+      margin-bottom: 10px; background: var(--panel); }
+    .check-list .sev { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 9px;
+      border-radius: 999px; margin-right: 8px; }
+    .check-list .sev.critical { background: #fbe6e2; color: #a83c2b; }
+    .check-list .sev.recommended { background: #fbf1dd; color: #8a5d10; }
+    .check-list .why { color: var(--muted); font-size: 14px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -187,6 +218,7 @@
           <span>SEO Audit & Fix MCP</span>
         </a>
         <div class="navlinks">
+          <a href="#check">Проверить сайт</a>
           <a href="#download">Скачать</a>
           <a href="#idea">MVP</a>
           <a href="#report">Отчет</a>
@@ -203,9 +235,10 @@
       <div>
         <div class="eyebrow">MCP для uCoz</div>
         <h1>SEO-аудит сайта без ручной рутины</h1>
-        <p class="lead">Агент сканирует публичные страницы, группирует проблемы по URL и шаблонам, готовит safe-fix план и помогает аккуратно внести правки через официальный uCoz MCP.</p>
+        <p class="lead">Проверьте сайт прямо здесь, без установки и регистрации. А чтобы найденное чинилось автоматически, подключите MCP: агент читает шаблоны через официальный uCoz MCP, готовит safe-fix план и вносит правки после вашего подтверждения.</p>
         <div class="actions">
-          <a class="btn primary" href="#install">Подключить MCP</a>
+          <a class="btn primary" href="#check">Проверить свой сайт</a>
+          <a class="btn" href="#install">Подключить MCP</a>
           <a class="btn" href="/seo-mcp/README-install.md">Открыть инструкцию</a>
         </div>
       </div>
@@ -222,11 +255,32 @@
       </div>
     </div>
 
+
+    <section id="check">
+      <div class="wrap">
+        <h2>Проверить сайт прямо сейчас</h2>
+        <p class="lead">Введите адрес. Проверим мета-теги, заголовки, canonical, Open Graph,
+          Schema.org, картинки без alt, robots, sitemap и внутренние ссылки. Установка и
+          регистрация не нужны, сайт при проверке только читается и не меняется.</p>
+
+        <form class="check-form" id="check-form">
+          <input id="check-url" type="text" inputmode="url" placeholder="mysite.ucoz.net"
+                 aria-label="Адрес сайта" autocomplete="url" required>
+          <button id="check-btn" type="submit">Проверить</button>
+        </form>
+        <p class="check-note">Смотрим до восьми страниц. Полный обход всего сайта и Lighthouse
+          доступны в MCP-режиме, там проверку запускает уже владелец сайта.</p>
+
+        <div class="check-out" id="check-out"></div>
+      </div>
+    </section>
+
     <section id="download">
       <div class="wrap">
         <h2>Что внутри</h2>
         <div class="grid">
           <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
+          <article class="card"><h3>Проверка по URL без установки</h3><p>Публичная форма на этой странице: вводите адрес, через несколько секунд видите список проблем. Ничего ставить не нужно, сайт при проверке только читается.</p></article>
           <article class="card"><h3>Отчеты для людей</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
           <article class="card"><h3>Lighthouse без ручного запуска</h3><p>Агент сам запускает Chrome/Lighthouse и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
           <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
@@ -371,5 +425,113 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
   <footer>
     <div class="wrap">uCoz SEO Audit & Fix MCP · MVP для безопасного SEO-аудита и повторной проверки. <span style="display:inline-block;margin-left:10px">Используются технологии <a href="https://www.ucoz.ru/"><b>uCoz</b></a></span></div>
   </footer>
+
+  <script>
+  /*
+   * Форма публичной проверки по URL.
+   *
+   * Сам аудит выполняет сервис из этого же пакета, src/web-server.mjs. Лендинг это только
+   * форма: браузер посетителя не может обойти чужой сайт сам, кросс-доменные запросы к нему
+   * заблокирует политика CORS, поэтому обход обязательно делает сервер.
+   *
+   * Куда слать запрос. По умолчанию берём тот же домен, на котором открыт лендинг: это
+   * работает, когда web-server.mjs отдаёт и страницу, и API. Если лендинг стоит отдельно,
+   * например на uCoz, а сервис на другом адресе, пропишите адрес в window.SEO_AUDIT_API
+   * ОДНОЙ строкой в шаблоне страницы, ничего больше менять не нужно:
+   *
+   *   <script>window.SEO_AUDIT_API = 'https://ваш-сервис/api/audit';<\/script>
+   *
+   * CORS на стороне сервиса уже открыт, отдельной настройки не требуется.
+   */
+  (function () {
+    var API = window.SEO_AUDIT_API || '/api/audit';
+
+    var form = document.getElementById('check-form');
+    var input = document.getElementById('check-url');
+    var button = document.getElementById('check-btn');
+    var out = document.getElementById('check-out');
+    if (!form) return;
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var value = input.value.trim();
+      if (!value) return;
+
+      button.disabled = true;
+      button.textContent = 'Проверяю';
+      out.innerHTML = '<div class="check-msg">Обхожу страницы, это несколько секунд.</div>';
+
+      fetch(API, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: value })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) throw new Error(data.error || 'Не получилось проверить сайт.');
+            return data;
+          });
+        })
+        .then(render)
+        .catch(function (error) {
+          // Сетевая ошибка означает, что сервис проверки просто не поднят по адресу API.
+          // Показываем это прямым текстом, а не общим "что-то пошло не так".
+          var offline = error instanceof TypeError;
+          out.innerHTML = '<div class="check-msg bad">' + escapeHtml(
+            offline
+              ? 'Сервис проверки сейчас недоступен. Поднять его можно командой npm run web из пакета.'
+              : error.message
+          ) + '</div>';
+        })
+        .finally(function () {
+          button.disabled = false;
+          button.textContent = 'Проверить';
+        });
+    });
+
+    function render(data) {
+      var s = data.summary || {};
+      var scores =
+        '<div class="check-scores">' +
+          score('crit', s.critical || 0, 'критичных') +
+          score('rec', s.recommended || 0, 'рекомендаций') +
+          score('ok', s.passed || 0, 'проверок OK') +
+          score('', data.pagesScanned || 0, 'страниц проверено') +
+        '</div>';
+
+      var issues = (data.issues || []).length
+        ? '<ul class="check-list">' + data.issues.map(row).join('') + '</ul>'
+        : '<div class="check-msg">Заметных проблем не нашли. Это редкость, поздравляем.</div>';
+
+      var cta =
+        '<div class="check-msg" style="margin-top:14px">' +
+        '<b>Часть этого чинится автоматически.</b> Подключите MCP в Codex, Cursor или Claude, ' +
+        'добавьте свой uCoz-сайт по токену, и агент внесёт безопасные правки прямо в шаблоны, ' +
+        'показав diff до записи. <a href="#install">Как подключить</a></div>';
+
+      out.innerHTML = scores + issues + cta;
+    }
+
+    function score(kind, value, label) {
+      return '<div class="' + kind + '"><b>' + value + '</b><span>' + label + '</span></div>';
+    }
+
+    function row(issue) {
+      var label = issue.severity === 'critical' ? 'критично' : 'рекомендация';
+      return '<li><span class="sev ' + issue.severity + '">' + label + '</span>' +
+        '<b>' + escapeHtml(issue.message || issue.code) + '</b>' +
+        ' <code>' + escapeHtml(issue.code) + '</code>' +
+        (issue.count > 1 ? ' <span class="check-note">на ' + issue.count + ' стр.</span>' : '') +
+        (issue.fix ? '<div class="why">' + escapeHtml(issue.fix) + '</div>' : '') +
+      '</li>';
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+      });
+    }
+  })();
+  </script>
 </body>
 </html>
