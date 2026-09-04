@@ -231,6 +231,8 @@
        переносить их можно только по любому символу. */
     .check-list a, .check-list code, .check-out a { overflow-wrap: anywhere; }
     img { max-width: 100%; height: auto; }
+      .dl-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .dl-row .btn { padding: 9px 14px; font-size: 14px; cursor: pointer; }
   </style>
   <script>
   /* Адрес сервиса проверки. Сервис развёрнут на собственном VPS, потому что там
@@ -585,6 +587,23 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
           '<div id="rest-issues" hidden style="margin-top:10px">' + issuesHtml + '</div></div>'
         : issuesHtml;
 
+      // Выгрузка отчёта. Сервер отдал готовые файлы вместе с результатом, поэтому
+      // скачивание мгновенное и не тратит лимит на повторную проверку.
+      var files = data.reports || {};
+      var download = Object.keys(files).length
+        ? '<div class="check-msg" style="margin-top:14px"><b>Скачать отчёт</b>' +
+          '<p class="check-note" style="margin:6px 0 10px">Для человека это обычный текстовый ' +
+          'отчёт. Для агента тот же аудит, но короче и с машинными кодами проблем: файл можно ' +
+          'отдать своему ИИ в Codex, Cursor или Claude вместе с подключённым uCoz MCP, и он ' +
+          'внесёт правки.</p>' +
+          '<div class="dl-row">' +
+            dlBtn('human-ru', 'Для человека, RU') +
+            dlBtn('agent-ru', 'Для ИИ, RU') +
+            dlBtn('agent-en', 'Для ИИ, EN') +
+            dlBtn('json', 'JSON') +
+          '</div></div>'
+        : '';
+
       var deep =
         '<div class="check-msg" style="margin-top:14px">' +
         '<b>Глубокая проверка.</b> Откроем в настоящем браузере ту страницу, адрес которой вы ввели: ' +
@@ -601,7 +620,7 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
         'применит подготовленные изменения и покажет diff до записи. ' +
         '<a href="#install">Как подключить</a></div>';
 
-      out.innerHTML = blocker + scores + skipped + issues + deep + cta;
+      out.innerHTML = blocker + scores + skipped + issues + download + deep + cta;
 
       // Раскрытие списка страниц. Отчёт группирует проблемы по типу, иначе тридцать
       // рекомендаций превращаются в тридцать одинаковых строк. Но без списка адресов
@@ -614,6 +633,10 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
           if (hidden) { box.removeAttribute('hidden'); } else { box.setAttribute('hidden', ''); }
           el.textContent = hidden ? 'скрыть страницы' : 'показать страницы';
         });
+      });
+
+      out.querySelectorAll('[data-dl]').forEach(function (el) {
+        el.addEventListener('click', function () { saveReport(el.getAttribute('data-dl'), data); });
       });
 
       var deepBtn = document.getElementById('check-deep');
@@ -726,6 +749,49 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
       }
 
       box.innerHTML = parts.join('');
+    }
+
+    function dlBtn(kind, label) {
+      return '<button type="button" class="btn" data-dl="' + kind + '">' + label + '</button>';
+    }
+
+    /**
+     * Сохраняет отчёт в файл. Имя собираем из домена и даты, чтобы в папке загрузок
+     * не копились одинаковые report.md, между которыми не разобрать, что к чему.
+     */
+    function saveReport(kind, data) {
+      var files = data.reports || {};
+      var host = 'site';
+      try { host = new URL(data.url).hostname.replace(/^www\./, ''); } catch (e) {}
+      var stamp = (data.scannedAt || new Date().toISOString()).slice(0, 10);
+
+      var map = {
+        'human-ru': [files.humanMd, 'seo-otchet-' + host + '-' + stamp + '.md', 'text/markdown'],
+        'agent-ru': [files.agentMdRu, 'seo-agent-ru-' + host + '-' + stamp + '.md', 'text/markdown'],
+        'agent-en': [files.agentMdEn, 'seo-agent-en-' + host + '-' + stamp + '.md', 'text/markdown'],
+        'json': [null, 'seo-audit-' + host + '-' + stamp + '.json', 'application/json']
+      };
+      var entry = map[kind];
+      if (!entry) return;
+
+      var body = entry[0];
+      if (kind === 'json') {
+        // В JSON сами тексты отчётов не кладём: это те же данные во второй раз,
+        // файл раздувается вдвое без всякой пользы.
+        var copy = {};
+        Object.keys(data).forEach(function (k) { if (k !== 'reports') copy[k] = data[k]; });
+        body = JSON.stringify(copy, null, 2);
+      }
+      if (!body) return;
+
+      var blob = new Blob([body], { type: entry[2] + ';charset=utf-8' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = entry[1];
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
     }
 
     function score(kind, value, label) {

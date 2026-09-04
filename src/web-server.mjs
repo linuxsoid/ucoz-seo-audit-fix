@@ -53,6 +53,8 @@ import { handleMcpRequest } from './mcp-http.mjs';
 import { browserSlotStats } from './browser-slot.mjs';
 import { runLighthouseAudit } from './lighthouse-audit.mjs';
 import { collectBrowserDiagnostics } from './browser-probe.mjs';
+import { toMarkdown } from './report.mjs';
+import { toAgentMarkdown } from './report-agent.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -405,6 +407,14 @@ function compactResult(result, ms) {
     // Служебные страницы движка в счёт не идут. Но сказать о них надо, иначе человек
     // не поймёт, почему проверено меньше страниц, чем он ожидал.
     systemPagesSkipped: (result.skippedUrls ?? []).length,
+    // Готовые файлы отчёта отдаём сразу, вместе с результатом. Отдельный запрос на
+    // скачивание означал бы повторный обход сайта: лишние секунды и лишний расход
+    // лимита у посетителя за то, что уже посчитано.
+    reports: {
+      humanMd: toMarkdown(result),
+      agentMdRu: toAgentMarkdown(result, { lang: 'ru' }),
+      agentMdEn: toAgentMarkdown(result, { lang: 'en' })
+    },
     issues: grouped.slice(0, 25),
     pages: (result.pages ?? []).map((page) => ({
       url: page.url,
