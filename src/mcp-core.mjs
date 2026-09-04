@@ -213,8 +213,10 @@ function forTransport(result) {
   const out = { ...result };
 
   if (Array.isArray(out.pages)) {
-    // Исходный HTML страниц нужен был только самим проверкам, и они уже отработали.
-    out.pages = out.pages.map(({ html, ...page }) => page);
+    // Исходный HTML и полный список ссылок нужны были самим проверкам, и они уже
+    // отработали: битые ссылки посчитаны, обход закончен. Держать их в ответе значит
+    // отдать тридцать килобайт адресов, по которым выводы уже сделаны.
+    out.pages = out.pages.map(({ html, links, ...page }) => ({ ...page, links: links?.length ?? 0 }));
   }
 
   if (out.lighthouse) out.lighthouse = trimLighthouse(out.lighthouse);
@@ -258,16 +260,16 @@ export async function callTool(name, args) {
     const delivered = await deliverReports(result, args.format);
     // Один и тот же объект под русским и английским ключом это буквально двойной вес
     // ответа. Отдаём его один раз, английский ключ ссылается на тот же объект.
-    const light = forTransport(result);
     return {
       'сводка': result.summary,
       'провереноСтраниц': result.pages.length,
       'файлыОтчётов': delivered.reportFiles,
-      'результатАудита': light,
       summary: result.summary,
       pagesScanned: result.pages.length,
       ...delivered,
-      auditResult: light
+      // Полный разбор отдаётся один раз. Раньше он лежал ещё и под русским ключом, и
+      // JSON честно выписывал его дважды: один и тот же объект, двойной вес ответа.
+      auditResult: forTransport(result)
     };
   }
 
@@ -299,7 +301,6 @@ export async function callTool(name, args) {
       'сводка': result.summary,
       'провереноФрагментов': result.pages.length,
       'файлыОтчётов': delivered.reportFiles,
-      'результатАудита': forTransport(result),
       summary: result.summary,
       fragmentsScanned: result.pages.length,
       ...delivered,
