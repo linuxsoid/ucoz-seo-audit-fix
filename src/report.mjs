@@ -77,6 +77,11 @@ ${formatSkippedUrls(result.skippedUrls ?? [])}
 `;
 }
 
+/** Домен проверенного сайта для заголовка отчёта. */
+function hostOf(url) {
+  try { return new URL(url).hostname; } catch { return String(url || 'сайт'); }
+}
+
 export function toHtml(result) {
   const issues = result.checks.filter((check) => check.severity !== 'pass');
   const contentIssues = issues.filter((check) => !String(check.code).startsWith('lighthouse.'));
@@ -89,7 +94,11 @@ export function toHtml(result) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SEO-отчёт</title>
+  <title>SEO-отчёт: ${esc(hostOf(result.startUrl))}</title>
+  <meta name="description" content="Результат SEO-аудита ${esc(hostOf(result.startUrl))}: критичных ${result.summary?.critical ?? 0}, рекомендаций ${result.summary?.recommended ?? 0}, пройдено ${result.summary?.passed ?? 0}. Проверка от ${esc(String(result.scannedAt).slice(0, 10))}.">
+  <!-- Отчёт это рабочий файл, а не страница для поиска: индексировать его незачем,
+       иначе чужие отчёты начнут попадать в выдачу вместо самого сервиса. -->
+  <meta name="robots" content="noindex, nofollow">
   <style>
     body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:0;background:#f6f4ef;color:#1d2026}
     main{max-width:1180px;margin:auto;padding:28px}
