@@ -210,7 +210,23 @@
     .check-list .sev.critical { background: #fbe6e2; color: #a83c2b; }
     .check-list .sev.recommended { background: #fbf1dd; color: #8a5d10; }
     .check-list .why { color: var(--muted); font-size: 14px; margin-top: 6px; }
-    </style>
+    
+    /* Защита от горизонтальной прокрутки.
+       Причина была в блоке «Установка»: конфиги MCP лежат в <pre> длинными строками,
+       а элементы grid по умолчанию имеют min-width auto и растягиваются под содержимое,
+       вместо того чтобы дать ему прокрутку. Из-за этого вся страница становилась шире
+       экрана. Лечим в корне: разрешаем колонкам сжиматься, а длинному коду прокручиваться. */
+    .steps { grid-template-columns: minmax(0, 1fr); }
+    .step, .card, .grid > *, .hero > * { min-width: 0; }
+    pre { max-width: 100%; overflow-x: auto; }
+    /* Таблицы прокручиваются сами на любой ширине, а не только на узких экранах:
+       колонки с длинными путями и именами тулов вылезали и на планшете. */
+    .matrix { display: block; overflow-x: auto; max-width: 100%; }
+    /* Адреса страниц и ресурсов в результатах бывают очень длинными и без пробелов,
+       переносить их можно только по любому символу. */
+    .check-list a, .check-list code, .check-out a { overflow-wrap: anywhere; }
+    img { max-width: 100%; height: auto; }
+  </style>
   <script>
   /* Адрес сервиса проверки. Сервис развёрнут на собственном VPS, потому что там
      есть Chrome и работает Lighthouse: на серверных скриптах uCoz браузера нет.
