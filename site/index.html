@@ -838,7 +838,7 @@ npm install --omit=dev</code></pre>
         ? 'Браузерная часть не отработала, поэтому в отчёте только результаты первой части.'
         : 'В отчёте всё: проверка страниц, Lighthouse и браузерная диагностика.';
 
-      var api = DEEP_API.replace(/\\/api\\/deep$/, '');
+      var api = DEEP_API.replace(/\/api\/deep$/, '');
 
       var rows = files.map(function (f) {
         return '<a class="btn" href="' + api + '/api/file?id=' + encodeURIComponent(sid) +
