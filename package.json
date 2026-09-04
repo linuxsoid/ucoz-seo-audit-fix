@@ -8,7 +8,8 @@
     "src",
     "scripts",
     "README.md",
-    "README-install.md"
+    "README-install.md",
+    "app.js"
   ],
   "bin": {
     "ucoz-seo-audit": "./src/cli.mjs",
@@ -22,7 +23,8 @@
     "smoke:mcp": "node ./scripts/mcp-smoke.mjs",
     "audit:mcp": "node ./scripts/mcp-audit-site.mjs",
     "web": "node ./src/web-server.mjs",
-    "mcp:http": "node ./src/mcp-http.mjs"
+    "mcp:http": "node ./src/mcp-http.mjs",
+    "start": "node ./app.js"
   },
   "engines": {
     "node": ">=20"
@@ -30,5 +32,6 @@
   "dependencies": {
     "chrome-launcher": "^1.2.1",
     "lighthouse": "^13.4.1"
-  }
+  },
+  "main": "app.js"
 }
