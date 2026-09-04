@@ -55,6 +55,7 @@ import { runLighthouseAudit } from './lighthouse-audit.mjs';
 import { collectBrowserDiagnostics } from './browser-probe.mjs';
 import { toMarkdown, toHtml } from './report.mjs';
 import { lighthouseChecksFromResult } from './lighthouse-audit.mjs';
+import { createZip } from './zip.mjs';
 import { toAgentMarkdown } from './report-agent.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -106,6 +107,12 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && route === 'deep') {
       return await handleDeepAudit(req, res);
     }
+    if (req.method === 'GET' && route === 'file') {
+      return sendArtifact(res, url.searchParams.get('id'), url.searchParams.get('name'));
+    }
+    if (req.method === 'GET' && route === 'bundle') {
+      return sendBundle(res, url.searchParams.get('id'));
+    }
     // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
     // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
     if (route === 'mcp') {
@@ -120,6 +127,112 @@ const server = createServer(async (req, res) => {
     return sendJson(res, 500, { error: 'Внутренняя ошибка', detail: String(error?.message ?? error) });
   }
 });
+
+/**
+ * Набор файлов, которые человек может скачать после проверки.
+ *
+ * Порядок и имена одинаковы и для отдельных ссылок, и для архива: если они разойдутся,
+ * человек получит в архиве не то, что видел кнопками, и доверять отчёту перестанет.
+ */
+function buildArtifacts(result, reports, lighthouse, browser) {
+  const host = hostOfUrl(result.startUrl);
+  const stamp = String(result.scannedAt || new Date().toISOString()).slice(0, 10);
+  const base = `${host}-${stamp}`;
+  const files = [];
+
+  const add = (name, data, type, title) => {
+    if (data === null || data === undefined || data === '') return;
+    files.push({ name, data, type, title });
+  };
+
+  if (reports) {
+    add(`seo-otchet-${base}.md`, reports.humanMd, 'text/markdown', 'Отчёт для человека, MD');
+    add(`seo-otchet-${base}.html`, reports.humanHtml, 'text/html', 'Отчёт для человека, HTML');
+    add(`seo-agent-ru-${base}.md`, reports.agentMdRu, 'text/markdown', 'Отчёт для ИИ, RU');
+    add(`seo-agent-en-${base}.md`, reports.agentMdEn, 'text/markdown', 'Отчёт для ИИ, EN');
+  }
+
+  // Машинные данные без текстов отчётов: те же сведения во второй раз только раздули бы файл.
+  const machine = { ...result };
+  delete machine.pages;
+  add(`seo-audit-${base}.json`, JSON.stringify({
+    url: result.startUrl,
+    scannedAt: result.scannedAt,
+    summary: result.summary,
+    checks: result.checks,
+    skippedUrls: result.skippedUrls
+  }, null, 2), 'application/json', 'Данные проверки, JSON');
+
+  if (browser?.available) {
+    add(`${base}.har`, JSON.stringify(browser.har, null, 2), 'application/json', 'Сетевые запросы, HAR');
+    add(`console-${base}.log`, browser.consoleLog, 'text/plain', 'Лог консоли браузера');
+    if (browser.screenshotBase64) {
+      add(`screenshot-${base}.jpg`, Buffer.from(browser.screenshotBase64, 'base64'), 'image/jpeg', 'Скриншот страницы');
+    }
+  }
+
+  if (lighthouse?.available) {
+    add(`lighthouse-${base}.html`, lighthouse.rawHtml, 'text/html', 'Официальный отчёт Lighthouse');
+    add(`lighthouse-${base}.json`, lighthouse.rawJson, 'application/json', 'Lighthouse, JSON');
+  }
+
+  return files;
+}
+
+function hostOfUrl(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'site'; }
+}
+
+/** Артефакты живут в той же сессии и умирают вместе с ней. */
+function rememberArtifacts(id, files) {
+  const entry = sessions.get(String(id ?? ''));
+  if (entry) entry.files = files;
+}
+
+function recallArtifacts(id) {
+  const entry = sessions.get(String(id ?? ''));
+  if (!entry) return null;
+  if (Date.now() - entry.at > SESSION_TTL_MS) {
+    sessions.delete(id);
+    return null;
+  }
+  return entry.files ?? null;
+}
+
+function sendArtifact(res, id, name) {
+  const files = recallArtifacts(id);
+  if (!files) return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
+  const file = files.find((f) => f.name === name);
+  if (!file) return sendJson(res, 404, { error: 'Такого файла в этой проверке нет.' });
+
+  const body = Buffer.isBuffer(file.data) ? file.data : Buffer.from(String(file.data), 'utf8');
+  res.writeHead(200, {
+    'content-type': `${file.type}; charset=utf-8`,
+    'content-length': body.length,
+    // Заставляем браузер сохранить файл, а не открыть его во вкладке.
+    'content-disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+    'cache-control': 'no-store',
+    'access-control-allow-origin': '*'
+  });
+  res.end(body);
+}
+
+function sendBundle(res, id) {
+  const files = recallArtifacts(id);
+  if (!files || !files.length) {
+    return sendJson(res, 404, { error: 'Результат проверки устарел. Запустите проверку заново.' });
+  }
+  const zip = createZip(files.map((f) => ({ name: f.name, data: f.data })));
+  const name = `seo-audit-${(files[0].name.match(/-([a-z0-9.-]+-\d{4}-\d{2}-\d{2})\./) || [])[1] || 'bundle'}.zip`;
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-length': zip.length,
+    'content-disposition': `attachment; filename="${name}"`,
+    'cache-control': 'no-store',
+    'access-control-allow-origin': '*'
+  });
+  res.end(zip);
+}
 
 /**
  * Короткая память о результатах проверки.
@@ -187,6 +300,8 @@ function matchRoute(pathname) {
   if (path === '/healthz' || path.endsWith('/healthz')) return 'healthz';
   if (path === '/api/audit' || path.endsWith('/api/audit')) return 'audit';
   if (path === '/api/deep' || path.endsWith('/api/deep')) return 'deep';
+  if (path === '/api/file' || path.endsWith('/api/file')) return 'file';
+  if (path === '/api/bundle' || path.endsWith('/api/bundle')) return 'bundle';
   if (path === '/mcp' || path.endsWith('/mcp')) return 'mcp';
   return 'page';
 }
@@ -311,11 +426,20 @@ async function handleDeepAudit(req, res) {
       };
     }
 
+    // Складываем всё, что можно скачать, в одну корзину сессии. Отсюда работают и
+    // отдельные ссылки, и общий архив, поэтому набор файлов гарантированно один и тот же.
+    if (base) {
+      rememberArtifacts(body?.sessionId, buildArtifacts(base, reports, lighthouse, browser));
+    }
+
     return sendJson(res, 200, {
       url: target,
       formFactor,
       summary: base?.summary ?? null,
       reports,
+      // Только описание файлов, без содержимого: сами файлы качаются по ссылке.
+      files: base ? (recallArtifacts(body?.sessionId) ?? []).map((f) => ({ name: f.name, title: f.title, size: Buffer.byteLength(Buffer.isBuffer(f.data) ? f.data : String(f.data)) })) : [],
+      sessionId: body?.sessionId ?? null,
       lighthouse: lighthouse?.available ? {
         categories: lighthouse.summary?.categories ?? [],
         metrics: lighthouse.summary?.metrics ?? [],

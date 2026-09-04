@@ -811,7 +811,7 @@ npm install --omit=dev</code></pre>
           lastHar = (data.browser && data.browser.har) || null;
           renderDeep(data);
           // Файлы отдаём только теперь: в них весь результат, включая Lighthouse.
-          showDownloads(data.reports, quick);
+          showDownloads(data, quick);
         })
         .catch(function (error) {
           box.innerHTML = '<div class="check-msg bad" style="margin-top:10px">' +
@@ -819,7 +819,7 @@ npm install --omit=dev</code></pre>
               ? 'Браузерная часть проверки сейчас недоступна.'
               : error.message) + '</div>';
           // Даже если браузерная часть не удалась, отчёт по первой части отдать нужно.
-          showDownloads(quick.reports, quick, true);
+          showDownloads(quick, quick, true);
         })
         .finally(function () {
           var head = document.querySelector('#check-deep-box b');
@@ -828,139 +828,49 @@ npm install --omit=dev</code></pre>
     }
 
     /**
-     * Показывает блок скачивания. Вызывается один раз, в самом конце проверки, поэтому
-     * человеку не приходится гадать, какие файлы к какому этапу относятся.
+     * Показывает блок скачивания. Вызывается один раз, в самом конце проверки.
+     *
+     * Список файлов приходит от сервера, фронтенд его не выдумывает: так набор кнопок
+     * и содержимое архива не могут разойтись.
      */
-    function showDownloads(reports, quick, partial) {
-      if (!reports || !Object.keys(reports).length) return;
-      lastReports = reports;
-      lastMeta = { url: quick.url, scannedAt: quick.scannedAt };
+    function showDownloads(data, quick, partial) {
+      var files = (data && data.files) || [];
+      var sid = (data && data.sessionId) || (quick && quick.sessionId);
+      if (!files.length || !sid) return;
 
       var note = partial
         ? 'Браузерная часть не отработала, поэтому в отчёте только результаты первой части.'
-        : 'В отчёте всё: и проверка страниц, и Lighthouse с браузерной диагностикой.';
+        : 'В отчёте всё: проверка страниц, Lighthouse и браузерная диагностика.';
 
-      var html = '<div class="check-msg" style="margin-top:14px"><b>Отчёт готов, можно скачать</b>' +
+      var api = DEEP_API.replace(/\\/api\\/deep$/, '');
+
+      var rows = files.map(function (f) {
+        return '<a class="btn" href="' + api + '/api/file?id=' + encodeURIComponent(sid) +
+          '&name=' + encodeURIComponent(f.name) + '">' + escapeHtml(f.title || f.name) +
+          ' <span class="check-note">' + humanSize(f.size) + '</span></a>';
+      }).join('');
+
+      var all = '<a class="btn primary" href="' + api + '/api/bundle?id=' + encodeURIComponent(sid) +
+        '">Скачать всё одним архивом</a>';
+
+      var html = '<div class="check-msg" style="margin-top:14px"><b>Отчёт готов</b>' +
         '<p class="check-note" style="margin:6px 0 10px">' + note +
-        ' HTML открывается двойным щелчком, markdown удобно вставить в переписку. Версия для ИИ ' +
-        'короче и с машинными кодами проблем: файл можно отдать своему агенту, и вместе с ' +
-        'подключённым uCoz MCP он внесёт правки.</p><div class="dl-row">' +
-        dlBtn('human-ru', 'Для человека, MD') +
-        dlBtn('html', 'Для человека, HTML') +
-        dlBtn('agent-ru', 'Для ИИ, RU') +
-        dlBtn('agent-en', 'Для ИИ, EN') +
-        dlBtn('har', 'HAR') +
-        dlBtn('json', 'JSON') +
-      '</div></div>';
+        ' Файлы те же, что вы забрали бы из DevTools руками: HAR по сети, лог консоли, ' +
+        'официальный отчёт Lighthouse и скриншот. Плюс наши отчёты для человека и для ИИ.</p>' +
+        '<div class="dl-row" style="margin-bottom:10px">' + all + '</div>' +
+        '<div class="dl-row">' + rows + '</div></div>';
 
       var host = document.createElement('div');
       host.innerHTML = html;
       out.appendChild(host);
-      host.querySelectorAll('[data-dl]').forEach(function (el) {
-        el.addEventListener('click', function () { saveReport(el.getAttribute('data-dl')); });
-      });
     }
 
-    function renderDeep(data) {
-      var box = document.getElementById('check-deep-out');
-      var parts = [];
-
-      var lh = data.lighthouse || {};
-      if (lh.unavailable) {
-        parts.push('<div class="check-note">Lighthouse: ' + escapeHtml(lh.unavailable) + '</div>');
-      } else {
-        parts.push('<div class="check-scores" style="margin-top:14px">' +
-          (lh.categories || []).map(function (c) {
-            var kind = c.score >= 90 ? 'ok' : (c.score >= 50 ? 'rec' : 'crit');
-            return score(kind, c.score, escapeHtml(c.title));
-          }).join('') + '</div>');
-        if ((lh.metrics || []).length) {
-          parts.push('<ul class="check-list">' + lh.metrics.map(function (m) {
-            return '<li><b>' + escapeHtml(m.label) + '</b> ' + escapeHtml(String(m.value)) + '</li>';
-          }).join('') + '</ul>');
-        }
-      }
-
-      var br = data.browser || {};
-      if (br.unavailable) {
-        parts.push('<div class="check-note">Браузерная диагностика: ' + escapeHtml(br.unavailable) + '</div>');
-      } else {
-        var b = br.summary || {};
-        // Если страница не догрузилась за отведённое время, об этом надо сказать прямо:
-        // иначе отчёт выглядит полным, а часть запросов и ошибок в него не попала.
-        if (br.loadNote) {
-          parts.push('<div class="check-msg bad" style="margin-top:12px">' +
-            escapeHtml(br.loadNote) + '</div>');
-        }
-        parts.push('<div class="check-scores">' +
-          score(b.consoleErrors ? 'crit' : 'ok', b.consoleErrors || 0, 'ошибок консоли') +
-          score(b.jsErrors ? 'crit' : 'ok', b.jsErrors || 0, 'ошибок JavaScript') +
-          score(b.failedRequests ? 'rec' : 'ok', b.failedRequests || 0, 'упавших запросов') +
-          score('', b.totalKb || 0, 'КБ вес страницы') +
-        '</div>');
-
-        var lines = [];
-        (br.consoleErrors || []).forEach(function (e) {
-          lines.push('<li><span class="sev critical">консоль</span>' + escapeHtml(e.text) + '</li>');
-        });
-        (br.jsErrors || []).forEach(function (e) {
-          lines.push('<li><span class="sev critical">JavaScript</span>' + escapeHtml(e.text) + '</li>');
-        });
-        (br.failedRequests || []).forEach(function (r) {
-          lines.push('<li><span class="sev recommended">запрос</span>' +
-            escapeHtml(String(r.status || r.error || '')) + ' ' + escapeHtml(r.url) + '</li>');
-        });
-        (br.heaviestRequests || []).slice(0, 5).forEach(function (r) {
-          lines.push('<li><span class="sev recommended">' + r.kb + ' КБ</span>' + escapeHtml(r.url) + '</li>');
-        });
-        if (lines.length) { parts.push('<ul class="check-list">' + lines.join('') + '</ul>'); }
-      }
-
-      box.innerHTML = parts.join('');
-    }
-
-    function dlBtn(kind, label) {
-      return '<button type="button" class="btn" data-dl="' + kind + '">' + label + '</button>';
-    }
-
-    /**
-     * Сохраняет отчёт в файл. Имя собираем из домена и даты, чтобы в папке загрузок
-     * не копились одинаковые report.md, между которыми не разобрать, что к чему.
-     */
-    function saveReport(kind) {
-      var files = lastReports || {};
-      var host = 'site';
-      try { host = new URL(lastMeta.url).hostname.replace(/^www\./, ''); } catch (e) {}
-      var stamp = (lastMeta.scannedAt || new Date().toISOString()).slice(0, 10);
-
-      var map = {
-        'human-ru': [files.humanMd, 'seo-otchet-' + host + '-' + stamp + '.md', 'text/markdown'],
-        'agent-ru': [files.agentMdRu, 'seo-agent-ru-' + host + '-' + stamp + '.md', 'text/markdown'],
-        'agent-en': [files.agentMdEn, 'seo-agent-en-' + host + '-' + stamp + '.md', 'text/markdown'],
-        'html': [files.humanHtml, 'seo-otchet-' + host + '-' + stamp + '.html', 'text/html'],
-        'har': [lastHar ? JSON.stringify(lastHar, null, 2) : null,
-                host + '-' + stamp + '.har', 'application/json'],
-        'json': [null, 'seo-audit-' + host + '-' + stamp + '.json', 'application/json']
-      };
-      var entry = map[kind];
-      if (!entry) return;
-
-      var body = entry[0];
-      if (kind === 'json') {
-        // В JSON кладём машинные данные без текстов отчётов: это те же сведения во второй
-        // раз, файл раздувался бы вдвое без пользы.
-        body = JSON.stringify(lastJson || {}, null, 2);
-      }
-      if (!body) return;
-
-      var blob = new Blob([body], { type: entry[2] + ';charset=utf-8' });
-      var link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = entry[1];
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+    /** Размер файла человеческими словами, чтобы было видно, что качаешь. */
+    function humanSize(bytes) {
+      if (!bytes && bytes !== 0) return '';
+      if (bytes < 1024) return bytes + ' Б';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' КБ';
+      return (bytes / 1048576).toFixed(1) + ' МБ';
     }
 
     function score(kind, value, label) {

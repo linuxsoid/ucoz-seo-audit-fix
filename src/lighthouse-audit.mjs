@@ -156,6 +156,13 @@ async function runLighthouseInternal(url, options = {}) {
     });
 
     const reportFiles = await writeLighthouseReports(result, { output });
+    // Официальный отчёт Lighthouse в исходном виде. Именно его человек открывает руками,
+    // и держать его только файлом на нашем диске бессмысленно: в удалённом режиме
+    // пользователь до этого диска не доберётся.
+    const rawReports = Array.isArray(result.report)
+      ? { html: result.report.find((r) => String(r).startsWith('<!--')) ?? result.report[0], json: result.report.find((r) => String(r).startsWith('{')) }
+      : { html: typeof result.report === 'string' && result.report.startsWith('<') ? result.report : null,
+          json: typeof result.report === 'string' && result.report.startsWith('{') ? result.report : null };
     const summary = summarizeLighthouse(result.lhr);
 
     return {
@@ -166,6 +173,8 @@ async function runLighthouseInternal(url, options = {}) {
       categories,
       summary,
       reportFiles,
+      rawHtml: rawReports.html ?? null,
+      rawJson: rawReports.json ?? null,
       lhr: {
         lighthouseVersion: result.lhr.lighthouseVersion,
         finalDisplayedUrl: result.lhr.finalDisplayedUrl,

@@ -190,6 +190,16 @@ async function probe(cdp, target, waitMs, formFactor) {
     totalBytes += r.bytes;
   }
 
+  // Скриншот страницы целиком. В DevTools это отдельная команда, и в отчёте он полезнее
+  // любого описания: сразу видно, что вообще увидел посетитель.
+  let screenshot = null;
+  try {
+    const shot = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 70, captureBeyondViewport: true });
+    if (shot?.data) screenshot = shot.data;
+  } catch {
+    // Скриншот не критичен: страница могла закрыться или оказаться слишком длинной.
+  }
+
   const errors = consoleMessages.filter((m) => m.level === 'error');
   const warnings = consoleMessages.filter((m) => m.level === 'warning' || m.level === 'warn');
 
@@ -207,6 +217,10 @@ async function probe(cdp, target, waitMs, formFactor) {
       ? ''
       : 'Страница не сообщила о полной загрузке за 30 секунд. Данные собраны на этот момент, часть поздних запросов и ошибок могла не попасть в отчёт.',
     har: buildHar(target, list),
+    // Консольный лог обычным текстом, как его сохраняет DevTools через «Save as».
+    consoleLog: buildConsoleLog(target, consoleMessages, jsErrors),
+    // base64, чтобы не таскать бинарь через JSON. Раскодируется при отдаче файла.
+    screenshotBase64: screenshot,
     сводка: {
       ошибокКонсоли: errors.length,
       предупреждений: warnings.length,
@@ -267,6 +281,35 @@ function waitForLoad(cdp, timeoutMs) {
       resolve(true);
     });
   });
+}
+
+/**
+ * Консольный лог в том виде, в каком его сохраняет DevTools: простой текст, по строке на
+ * сообщение, с уровнем и источником. Формат нарочно скучный, чтобы его можно было грепать
+ * и вставлять в переписку.
+ */
+function buildConsoleLog(pageUrl, messages, jsErrors) {
+  const lines = [
+    `# Console log: ${pageUrl}`,
+    `# ${new Date().toISOString()}`,
+    `# сообщений: ${messages.length}, необработанных ошибок JavaScript: ${jsErrors.length}`,
+    ''
+  ];
+
+  for (const m of messages) {
+    const where = m.url ? ` (${m.url})` : '';
+    lines.push(`[${String(m.level || 'log').toUpperCase()}] [${m.source || 'console'}] ${m.text}${where}`);
+  }
+
+  if (jsErrors.length) {
+    lines.push('', '# Необработанные исключения JavaScript', '');
+    for (const e of jsErrors) {
+      const where = e.url ? ` (${e.url}${e.line != null ? ':' + e.line : ''})` : '';
+      lines.push(`[EXCEPTION] ${e.text}${where}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 /**
