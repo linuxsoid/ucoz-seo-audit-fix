@@ -53,7 +53,7 @@ import { handleMcpRequest } from './mcp-http.mjs';
 import { browserSlotStats } from './browser-slot.mjs';
 import { runLighthouseAudit } from './lighthouse-audit.mjs';
 import { collectBrowserDiagnostics } from './browser-probe.mjs';
-import { toMarkdown } from './report.mjs';
+import { toMarkdown, toHtml } from './report.mjs';
 import { toAgentMarkdown } from './report-agent.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -412,6 +412,9 @@ function compactResult(result, ms) {
     // лимита у посетителя за то, что уже посчитано.
     reports: {
       humanMd: toMarkdown(result),
+      // Готовый HTML: его можно открыть двойным щелчком и показать заказчику,
+      // не заставляя человека разбираться в markdown или в JSON.
+      humanHtml: toHtml(result),
       agentMdRu: toAgentMarkdown(result, { lang: 'ru' }),
       agentMdEn: toAgentMarkdown(result, { lang: 'en' })
     },
