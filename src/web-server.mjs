@@ -51,6 +51,8 @@ import { isIP } from 'node:net';
 import { auditSite } from './seo-audit.mjs';
 import { handleMcpRequest } from './mcp-http.mjs';
 import { browserSlotStats } from './browser-slot.mjs';
+import { runLighthouseAudit } from './lighthouse-audit.mjs';
+import { collectBrowserDiagnostics } from './browser-probe.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -89,7 +91,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && route === 'healthz') {
       return sendJson(res, 200, { ok: true, running, maxPages: MAX_PAGES, browser: browserSlotStats() });
     }
-    if (req.method === 'OPTIONS' && route === 'audit') {
+    if (req.method === 'OPTIONS' && (route === 'audit' || route === 'deep')) {
       // Форму можно встроить на лендинг seoaudit.ucoz.net, а он живёт на другом origin,
       // поэтому CORS для этого маршрута открыт осознанно. Эндпоинт ничего не пишет и не
       // читает состояние пользователя, отдавать его кросс-доменно безопасно.
@@ -97,6 +99,9 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'POST' && route === 'audit') {
       return await handleAudit(req, res);
+    }
+    if (req.method === 'POST' && route === 'deep') {
+      return await handleDeepAudit(req, res);
     }
     // Remote MCP на том же порту и том же домене, что и витрина. Так на хостинге
     // получается один Node-апп и один URL: витрина для людей, /mcp для агентов.
@@ -137,6 +142,7 @@ function matchRoute(pathname) {
 
   if (path === '/healthz' || path.endsWith('/healthz')) return 'healthz';
   if (path === '/api/audit' || path.endsWith('/api/audit')) return 'audit';
+  if (path === '/api/deep' || path.endsWith('/api/deep')) return 'deep';
   if (path === '/mcp' || path.endsWith('/mcp')) return 'mcp';
   return 'page';
 }
@@ -182,6 +188,78 @@ async function handleAudit(req, res) {
     return sendJson(res, 502, { error: String(error?.message ?? error) });
   } finally {
     running -= 1;
+  }
+}
+
+
+/**
+ * Глубокая проверка: Lighthouse плюс браузерная диагностика одной страницы.
+ *
+ * Отделена от обычной проверки сознательно. Обычная проверка это чистые HTTP-запросы,
+ * она обходит восемь страниц за секунды и выдерживает любой поток посетителей. Глубокая
+ * поднимает настоящий Chrome, занимает единственный слот браузера и идёт около минуты.
+ * Смешивать их в одной кнопке нельзя: тогда каждый случайный посетитель запускал бы
+ * браузер, и очередь встала бы намертво.
+ *
+ * Поэтому здесь свой, более жёсткий лимит по IP и явное предупреждение в интерфейсе,
+ * что это дольше.
+ */
+async function handleDeepAudit(req, res) {
+  const ip = clientIp(req);
+  // Глубокая проверка дороже обычной примерно в двадцать раз, поэтому и лимит строже:
+  // берём три токена вместо одного из того же окна.
+  for (let i = 0; i < 3; i += 1) {
+    if (!takeRateToken(ip)) {
+      return sendJson(res, 429, {
+        error: 'Глубокая проверка доступна ограниченно. Попробуйте через несколько минут.'
+      });
+    }
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    return sendJson(res, 400, { error: String(error.message) });
+  }
+
+  let target;
+  try {
+    target = await resolveSafeTarget(body?.url);
+  } catch (error) {
+    return sendJson(res, 400, { error: String(error.message) });
+  }
+
+  const formFactor = body?.formFactor === 'desktop' ? 'desktop' : 'mobile';
+
+  try {
+    // Запускаем последовательно, а не параллельно: слот браузера один, и параллельный
+    // запуск просто заблокировал бы сам себя на ожидании очереди.
+    const lighthouse = await runLighthouseAudit(target, {
+      formFactor,
+      categories: ['performance', 'accessibility', 'best-practices', 'seo'],
+      output: []
+    });
+    const browser = await collectBrowserDiagnostics(target, { formFactor, waitMs: 4000 });
+
+    return sendJson(res, 200, {
+      url: target,
+      formFactor,
+      lighthouse: lighthouse?.available ? {
+        categories: lighthouse.summary?.categories ?? [],
+        metrics: lighthouse.summary?.metrics ?? [],
+        topIssues: (lighthouse.summary?.topIssues ?? []).slice(0, 8)
+      } : { unavailable: lighthouse?.reason ?? 'Lighthouse недоступен.' },
+      browser: browser?.available ? {
+        summary: browser.summary,
+        consoleErrors: browser.consoleErrors.slice(0, 10),
+        jsErrors: browser.jsErrors.slice(0, 10),
+        failedRequests: browser.failedRequests.slice(0, 10),
+        heaviestRequests: browser.heaviestRequests.slice(0, 8)
+      } : { unavailable: browser?.reason ?? 'Диагностика недоступна.' }
+    });
+  } catch (error) {
+    return sendJson(res, 502, { error: String(error?.message ?? error) });
   }
 }
 
@@ -287,8 +365,16 @@ function compactResult(result, ms) {
   const issues = (result.checks ?? []).filter((check) => check.severity !== 'pass');
   const byCode = new Map();
   for (const issue of issues) {
-    const entry = byCode.get(issue.code) ?? { code: issue.code, severity: issue.severity, count: 0, message: issue.message, fix: issue.fix };
+    const entry = byCode.get(issue.code) ?? {
+      code: issue.code, severity: issue.severity, count: 0,
+      message: issue.message, fix: issue.fix, pages: []
+    };
     entry.count += 1;
+    // Список страниц нужен, чтобы отчёт можно было использовать, а не только смотреть:
+    // без него человек видит «нет H1 на 8 страницах» и не знает, на каких именно.
+    if (issue.url && entry.pages.length < 30 && !entry.pages.includes(issue.url)) {
+      entry.pages.push(issue.url);
+    }
     // Критичность группы это максимум по группе: одна критичная страница делает проблему критичной.
     if (issue.severity === 'critical') entry.severity = 'critical';
     byCode.set(issue.code, entry);
@@ -516,12 +602,12 @@ function render(data) {
 
   const issues = (data.issues || []).length
     ? '<ul class="issues">' + data.issues.map(issueRow).join('') + '</ul>'
-    : '<div class="msg">Заметных проблем не нашли. Это редкость, поздравляем.</div>';
+    : '<div class="msg">По текущему набору проверок заметных проблем не обнаружено.</div>';
 
   const cta =
-    '<div class="cta"><b>Часть этого чинится автоматически.</b><br>' +
+    '<div class="cta"><b>Часть найденных проблем можно исправить автоматически.</b><br>' +
     'Поставьте MCP себе в Codex, Cursor или Claude, подключите свой uCoz-сайт по токену, ' +
-    'и агент внесёт безопасные правки прямо в шаблоны, показав diff до записи. ' +
+    'и после подтверждения система применит подготовленные изменения и покажет diff до записи. ' +
     '<a href="/#install">Как подключить</a></div>';
 
   out.innerHTML = cards + issues + cta;

@@ -273,7 +273,7 @@
                  aria-label="Адрес сайта" autocomplete="url" required>
           <button id="check-btn" type="submit">Проверить</button>
         </form>
-        <p class="check-note">Смотрим до восьми страниц. Полный обход всего сайта и Lighthouse
+        <p class="check-note">Проверяем до 8 страниц. Полный обход всего сайта и Lighthouse
           доступны в MCP-режиме, там проверку запускает уже владелец сайта.</p>
 
         <div class="check-out" id="check-out"></div>
@@ -287,18 +287,18 @@
         <div class="grid">
           <article class="card"><h3>Аудит публичных страниц</h3><p>Title, description, H1, canonical, Open Graph, Twitter Card, Schema.org, изображения без alt, robots и sitemap.</p></article>
           <article class="card"><h3>Проверка по URL без установки</h3><p>Публичная форма на этой странице: вводите адрес, через несколько секунд видите список проблем. Ничего ставить не нужно, сайт при проверке только читается.</p></article>
-          <article class="card"><h3>Отчеты для людей</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
-          <article class="card"><h3>Lighthouse без ручного запуска</h3><p>Агент сам запускает Chrome/Lighthouse и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
+          <article class="card"><h3>Удобные форматы отчёта</h3><p>JSON для автоматизации, Markdown для обсуждения и HTML для демонстрации клиенту.</p></article>
+          <article class="card"><h3>Lighthouse без ручного запуска</h3><p>Проверка Lighthouse запускается автоматически и добавляет Performance, SEO, Accessibility, Best Practices и lab metrics в отчет.</p></article>
           <article class="card"><h3>Safe-fix workflow</h3><p>Правки делятся на безопасные, требующие approve и ручные рекомендации.</p></article>
-          <article class="card wide"><h3>Связка с uCoz</h3><p>SEO MCP отвечает за анализ, отчет и план исправлений. Официальный <code>ucoz-mcp</code> читает шаблоны, страницы и FTP-файлы сайта, делает backup и применяет подтвержденные точечные правки.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
-          <article class="card"><h3>Повторная проверка</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
+          <article class="card wide"><h3>Интеграция с uCoz</h3><p>SEO MCP отвечает за анализ, отчет и план исправлений. Официальный <code>ucoz-mcp</code> читает шаблоны, страницы и FTP-файлы сайта, делает backup и применяет подтвержденные точечные правки.</p><p class="hint"><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Как подключить официальный MCP uCoz</a></p></article>
+          <article class="card"><h3>Проверка после исправлений</h3><p>После исправлений аудит запускается еще раз, а <code>compare_audits</code> показывает, сколько проблем ушло и что осталось.</p></article>
         </div>
       </div>
     </section>
 
     <section id="idea">
       <div class="wrap">
-        <h2>Соответствие идее 17</h2>
+        <h2>Возможности сервиса</h2>
         <table class="matrix">
           <thead><tr><th>Требование</th><th>Статус в MVP</th><th>Как реализовано</th></tr></thead>
           <tbody>
@@ -312,20 +312,20 @@
           </tbody>
         </table>
         <div class="grid" style="margin-top:14px">
-          <article class="card"><h3>Что уже можно показать в демо</h3><p>Взять реальный uCoz-сайт, запустить аудит, показать список проблем, подготовить safe-fix план, применить подтвержденные правки и повторить проверку.</p></article>
-          <article class="card"><h3>Следующий этап</h3><p>Lighthouse/PageSpeed, Core Web Vitals, PDF-отчет, генерация Schema.org, расширенный canonical/robots/sitemap audit и проверка redirect chains.</p></article>
-          <article class="card"><h3>Что не обещаем</h3><p>Это не Ahrefs/Semrush-клон, не backlink-анализатор и не инструмент, который гарантирует рост позиций или переписывает весь контент сайта.</p></article>
+          <article class="card"><h3>Что доступно сейчас</h3><p>Взять реальный uCoz-сайт, запустить аудит, показать список проблем, подготовить safe-fix план, применить подтвержденные правки и повторить проверку.</p></article>
+          <article class="card"><h3>В планах</h3><p>Lighthouse/PageSpeed, Core Web Vitals, PDF-отчет, генерация Schema.org, расширенный canonical/robots/sitemap audit и проверка redirect chains.</p></article>
+          <article class="card"><h3>Что не входит в сервис</h3><p>Это не Ahrefs/Semrush-клон, не backlink-анализатор и не инструмент, который гарантирует рост позиций или переписывает весь контент сайта.</p></article>
         </div>
       </div>
     </section>
 
     <section id="report">
       <div class="wrap">
-        <h2>Как читается отчет</h2>
+        <h2>Что вы увидите в отчёте</h2>
         <div class="grid">
           <article class="card"><h3>Сводка</h3><p>Верх отчета показывает количество Critical, Recommended и Passed, чтобы сразу понять масштаб проблемы.</p></article>
           <article class="card"><h3>Группировка по страницам</h3><p>Замечания собираются под публичным URL страницы. Служебные ссылки редактирования uCoz не смешиваются с реальными страницами сайта.</p></article>
-          <article class="card"><h3>Где править</h3><p>Для типовых URL отчет подсказывает модуль, название шаблона и <code>module_id/template_id</code>: например страница товара, каталог, регистрация или редактор страниц.</p></article>
+          <article class="card"><h3>Где внести изменение</h3><p>Для типовых URL отчет подсказывает модуль, название шаблона и <code>module_id/template_id</code>: например страница товара, каталог, регистрация или редактор страниц.</p></article>
           <article class="card"><h3>Lighthouse</h3><p>Отдельный блок показывает оценки, Core Web Vitals/lab metrics и главные рекомендации без ручного запуска тестов.</p></article>
         </div>
         <table class="matrix" style="margin-top:14px">
@@ -451,6 +451,10 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
    */
   (function () {
     var API = window.SEO_AUDIT_API || '/api/audit';
+    // Глубокая проверка живёт рядом с обычной, поэтому адрес выводим из того же
+    // корня. Переопределить можно через window.SEO_DEEP_API.
+    var DEEP_API = window.SEO_DEEP_API || API.replace(/\/api\/audit$/, '/api/deep');
+    var lastUrl = '';
 
     var form = document.getElementById('check-form');
     var input = document.getElementById('check-url');
@@ -496,6 +500,7 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
     });
 
     function render(data) {
+      lastUrl = data.url || input.value.trim();
       var s = data.summary || {};
       var scores =
         '<div class="check-scores">' +
@@ -507,28 +512,153 @@ UCOZ_FTP_PASS = "..."</code></pre></div></div>
 
       var issues = (data.issues || []).length
         ? '<ul class="check-list">' + data.issues.map(row).join('') + '</ul>'
-        : '<div class="check-msg">Заметных проблем не нашли. Это редкость, поздравляем.</div>';
+        : '<div class="check-msg">По текущему набору проверок заметных проблем не обнаружено.</div>';
+
+      var deep =
+        '<div class="check-msg" style="margin-top:14px">' +
+        '<b>Глубокая проверка.</b> Откроем главную страницу в настоящем браузере: ' +
+        'оценки Lighthouse, Core Web Vitals, ошибки консоли и упавшие запросы. ' +
+        'Занимает около минуты.<br>' +
+        '<button type="button" class="btn primary" id="check-deep" style="margin-top:10px">' +
+        'Запустить глубокую проверку</button>' +
+        '<div id="check-deep-out"></div></div>';
 
       var cta =
         '<div class="check-msg" style="margin-top:14px">' +
-        '<b>Часть этого чинится автоматически.</b> Подключите MCP в Codex, Cursor или Claude, ' +
-        'добавьте свой uCoz-сайт по токену, и агент внесёт безопасные правки прямо в шаблоны, ' +
-        'показав diff до записи. <a href="#install">Как подключить</a></div>';
+        '<b>Часть найденных проблем можно исправить автоматически.</b> Подключите MCP в Codex, ' +
+        'Cursor или Claude, добавьте свой uCoz-сайт по токену, и после подтверждения система ' +
+        'применит подготовленные изменения и покажет diff до записи. ' +
+        '<a href="#install">Как подключить</a></div>';
 
-      out.innerHTML = scores + issues + cta;
+      out.innerHTML = scores + issues + deep + cta;
+
+      // Раскрытие списка страниц. Отчёт группирует проблемы по типу, иначе тридцать
+      // рекомендаций превращаются в тридцать одинаковых строк. Но без списка адресов
+      // отчётом нельзя пользоваться: видно «нет H1 на 8 страницах» и непонятно, где.
+      out.querySelectorAll('[data-toggle]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var box = document.getElementById(el.getAttribute('data-toggle'));
+          if (!box) return;
+          var hidden = box.hasAttribute('hidden');
+          if (hidden) { box.removeAttribute('hidden'); } else { box.setAttribute('hidden', ''); }
+          el.textContent = hidden ? 'скрыть страницы' : 'показать страницы';
+        });
+      });
+
+      var deepBtn = document.getElementById('check-deep');
+      if (deepBtn) { deepBtn.addEventListener('click', runDeep); }
+    }
+
+    function runDeep() {
+      var btn = document.getElementById('check-deep');
+      var box = document.getElementById('check-deep-out');
+      btn.disabled = true;
+      btn.textContent = 'Проверяю в браузере';
+      box.innerHTML = '<div class="check-note" style="margin-top:10px">Запускаем браузер. ' +
+        'Если сейчас идут другие проверки, запрос подождёт своей очереди.</div>';
+
+      fetch(DEEP_API, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: lastUrl })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) { throw new Error(data.error || 'Не получилось выполнить проверку.'); }
+            return data;
+          });
+        })
+        .then(renderDeep)
+        .catch(function (error) {
+          box.innerHTML = '<div class="check-msg bad" style="margin-top:10px">' +
+            escapeHtml(error instanceof TypeError
+              ? 'Сервис глубокой проверки сейчас недоступен.'
+              : error.message) + '</div>';
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Запустить ещё раз';
+        });
+    }
+
+    function renderDeep(data) {
+      var box = document.getElementById('check-deep-out');
+      var parts = [];
+
+      var lh = data.lighthouse || {};
+      if (lh.unavailable) {
+        parts.push('<div class="check-note">Lighthouse: ' + escapeHtml(lh.unavailable) + '</div>');
+      } else {
+        parts.push('<div class="check-scores" style="margin-top:14px">' +
+          (lh.categories || []).map(function (c) {
+            var kind = c.score >= 90 ? 'ok' : (c.score >= 50 ? 'rec' : 'crit');
+            return score(kind, c.score, escapeHtml(c.title));
+          }).join('') + '</div>');
+        if ((lh.metrics || []).length) {
+          parts.push('<ul class="check-list">' + lh.metrics.map(function (m) {
+            return '<li><b>' + escapeHtml(m.label) + '</b> ' + escapeHtml(String(m.value)) + '</li>';
+          }).join('') + '</ul>');
+        }
+      }
+
+      var br = data.browser || {};
+      if (br.unavailable) {
+        parts.push('<div class="check-note">Браузерная диагностика: ' + escapeHtml(br.unavailable) + '</div>');
+      } else {
+        var b = br.summary || {};
+        parts.push('<div class="check-scores">' +
+          score(b.consoleErrors ? 'crit' : 'ok', b.consoleErrors || 0, 'ошибок консоли') +
+          score(b.jsErrors ? 'crit' : 'ok', b.jsErrors || 0, 'ошибок JavaScript') +
+          score(b.failedRequests ? 'rec' : 'ok', b.failedRequests || 0, 'упавших запросов') +
+          score('', b.totalKb || 0, 'КБ вес страницы') +
+        '</div>');
+
+        var lines = [];
+        (br.consoleErrors || []).forEach(function (e) {
+          lines.push('<li><span class="sev critical">консоль</span>' + escapeHtml(e.text) + '</li>');
+        });
+        (br.jsErrors || []).forEach(function (e) {
+          lines.push('<li><span class="sev critical">JavaScript</span>' + escapeHtml(e.text) + '</li>');
+        });
+        (br.failedRequests || []).forEach(function (r) {
+          lines.push('<li><span class="sev recommended">запрос</span>' +
+            escapeHtml(String(r.status || r.error || '')) + ' ' + escapeHtml(r.url) + '</li>');
+        });
+        (br.heaviestRequests || []).slice(0, 5).forEach(function (r) {
+          lines.push('<li><span class="sev recommended">' + r.kb + ' КБ</span>' + escapeHtml(r.url) + '</li>');
+        });
+        if (lines.length) { parts.push('<ul class="check-list">' + lines.join('') + '</ul>'); }
+      }
+
+      box.innerHTML = parts.join('');
     }
 
     function score(kind, value, label) {
       return '<div class="' + kind + '"><b>' + value + '</b><span>' + label + '</span></div>';
     }
 
-    function row(issue) {
+    function row(issue, index) {
       var label = issue.severity === 'critical' ? 'критично' : 'рекомендация';
+      var id = 'issue-pages-' + index;
+      var pages = issue.pages || [];
+      var toggle = pages.length
+        ? ' <a href="javascript:void(0)" data-toggle="' + id + '">показать страницы</a>'
+        : '';
+      var list = pages.length
+        ? '<div id="' + id + '" hidden class="why"><ul style="margin:6px 0 0;padding-left:18px">' +
+          pages.map(function (u) {
+            return '<li><a href="' + escapeHtml(u) + '" target="_blank" rel="noopener">' +
+              escapeHtml(u) + '</a></li>';
+          }).join('') + '</ul></div>'
+        : '';
+
       return '<li><span class="sev ' + issue.severity + '">' + label + '</span>' +
         '<b>' + escapeHtml(issue.message || issue.code) + '</b>' +
         ' <code>' + escapeHtml(issue.code) + '</code>' +
         (issue.count > 1 ? ' <span class="check-note">на ' + issue.count + ' стр.</span>' : '') +
+        toggle +
         (issue.fix ? '<div class="why">' + escapeHtml(issue.fix) + '</div>' : '') +
+        list +
       '</li>';
     }
 
