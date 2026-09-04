@@ -122,10 +122,12 @@ Flow:
 10. Через `ucoz-mcp.templates_tool.validate_template` проверить шаблон.
 11. Повторить `audit_site` и сравнить состояние через `compare_audits`.
 
-## Demo flow
+## Демо-сценарий для разработчика
 
 ```powershell
 node .\src\cli.mjs audit https://site.ucoz.net --max-pages 15
-node .\src\cli.mjs fix-template .\exports\AHEADER.html --title "Site name" --description "Site description"
+
+node .\src\cli.mjs fix-template .\exports\AHEADER.html --title "Название сайта" --description "Краткое описание страницы"
+
 node .\src\cli.mjs audit https://site.ucoz.net --max-pages 15
 ```
