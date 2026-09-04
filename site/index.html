@@ -464,57 +464,63 @@
     <section id="install">
       <div class="wrap">
         <h2>Установка</h2>
-        <p class="lead">Два способа. Первый ничего не требует и всегда свежий, второй нужен,
-          если хотите держать инструмент у себя.</p>
+        <p class="lead">Подключение занимает одну строку. Скачивать и устанавливать нечего:
+          сервис работает на нашей стороне, поэтому у вас всегда свежая версия.</p>
 
-        <div class="card notice" style="margin-bottom:14px">
-          <h3>Способ 1: подключить одним адресом, рекомендуемый</h3>
-          <p>Ставить и качать нечего. Ни Node, ни пакета, ни Chrome. Добавьте в Codex, Cursor
-            или Claude один сервер:</p>
-          <pre><code>{
+        <div class="grid">
+          <article class="card">
+            <h3>Claude Code</h3>
+<pre><code>claude mcp add --transport http \
+  ucoz-seo-audit \
+  https://109-172-8-16.sslip.io/seo/mcp</code></pre>
+          </article>
+
+          <article class="card">
+            <h3>Grok</h3>
+<pre><code>grok mcp add --transport http \
+  ucoz-seo-audit \
+  https://109-172-8-16.sslip.io/seo/mcp</code></pre>
+            <p class="hint">Терминальный клиент Grok Build от xAI.</p>
+          </article>
+
+          <article class="card">
+            <h3>ChatGPT, режим Codex</h3>
+            <p class="hint">Файл <code>~/.codex/config.toml</code></p>
+<pre><code>[mcp_servers.ucoz-seo-audit]
+url = "https://109-172-8-16.sslip.io/seo/mcp"</code></pre>
+          </article>
+
+          <article class="card">
+            <h3>Cursor</h3>
+            <p class="hint">Файл <code>~/.cursor/mcp.json</code></p>
+<pre><code>{
   "mcpServers": {
-    "ucoz-seo-audit": { "url": "https://109-172-8-16.sslip.io/seo/mcp" }
+    "ucoz-seo-audit": {
+      "url": "https://109-172-8-16.sslip.io/seo/mcp"
+    }
   }
 }</code></pre>
-          <p class="hint">Codex в формате TOML: <code>[mcp_servers.ucoz-seo-audit]</code> и
-            <code>url = "https://109-172-8-16.sslip.io/seo/mcp"</code></p>
-        </div>
+          </article>
 
-        <div class="steps">
-          <div class="step">
-            <div>
-              <h3>Способ 2: поставить локально из репозитория</h3>
-              <p>Так вы получаете и те инструменты, которым нужен браузер и файлы на вашей
-                машине. Код берётся из репозитория, поэтому версия всегда текущая.</p>
+          <article class="card wide">
+            <h3>Если хотите держать инструмент у себя</h3>
+            <p>Локальная установка нужна тем, кому важны инструменты, работающие с браузером и
+              файлами на своей машине. Код берётся из репозитория, поэтому версия всегда текущая.</p>
 <pre><code>git clone https://github.com/linuxsoid/ucoz-seo-audit-fix.git
 cd ucoz-seo-audit-fix
 npm install --omit=dev</code></pre>
-<pre><code>[mcp_servers.ucoz-seo-audit]
-command = "node"
-args = ["/путь/к/ucoz-seo-audit-fix/src/mcp-server.mjs"]</code></pre>
-            </div>
-          </div>
-          <div class="step">
-            <div>
-              <h3>Официальный uCoz MCP, если нужны автоматические правки</h3>
-              <p>Отдельный продукт платформы uCoz. Для самой проверки он не нужен, подключайте
-                его только чтобы агент мог открыть шаблоны и внести правки.
-                <a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Инструкция uCoz</a>.</p>
-<pre><code>[mcp_servers.ucoz]
-command = "npx"
-args = ["-y", "ucoz-mcp@latest"]
+            <p class="hint">Дальше пропишите в клиенте запуск
+              <code>node /путь/к/ucoz-seo-audit-fix/src/mcp-server.mjs</code></p>
+          </article>
+        </div>
 
-[mcp_servers.ucoz.env]
-UCOZ_API_TOKEN = "sk_live_..."
-UCOZ_SITE_URL = "https://ваш-сайт.ucoz.net/"</code></pre>
-            </div>
-          </div>
-          <div class="step">
-            <div>
-              <h3>Перезапустите клиент</h3>
-              <p>После сохранения конфига Codex, Cursor или Claude подхватит сервер сам.</p>
-            </div>
-          </div>
+        <div class="card notice" style="margin-top:14px">
+          <h3>Нужны автоматические правки? Понадобится ещё официальный uCoz MCP</h3>
+          <p>Это отдельный продукт платформы uCoz, не наш. Для проверки сайта он не нужен вообще.
+            Подключайте его, только если хотите, чтобы агент открывал шаблоны и вносил правки.</p>
+          <p><a href="https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz" target="_blank" rel="noopener">Официальная инструкция по подключению uCoz MCP</a></p>
+          <p class="hint">Инструкцию сознательно не дублируем у себя: она обновляется на стороне
+            uCoz, и копия рано или поздно разойдётся с оригиналом.</p>
         </div>
       </div>
     </section>

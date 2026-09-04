@@ -138,11 +138,33 @@ MCP_HOSTED=1 npm run web
 # MCP      http://localhost:8787/mcp
 ```
 
-Клиент подключается так:
+Подключение занимает одну строку, ставить нечего.
+
+```bash
+# Claude Code
+claude mcp add --transport http ucoz-seo-audit https://ваш-домен/mcp
+
+# Grok Build
+grok mcp add --transport http ucoz-seo-audit https://ваш-домен/mcp
+```
+
+ChatGPT в режиме Codex, файл `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.ucoz-seo-audit]
+url = "https://ваш-домен/mcp"
+```
+
+Cursor, файл `~/.cursor/mcp.json`:
 
 ```json
 { "mcpServers": { "ucoz-seo-audit": { "url": "https://ваш-домен/mcp" } } }
 ```
+
+Официальный uCoz MCP это отдельный продукт платформы, для аудита он не нужен. Он
+понадобится, только если хотите автоматические правки в шаблонах. Инструкцию у себя
+сознательно не дублируем, она живёт на стороне uCoz:
+https://www.ucoz.ru/help/tools/podklyuchenie-mcp-ucoz
 
 | Переменная | Что делает |
 | --- | --- |
