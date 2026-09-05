@@ -46,8 +46,33 @@ async function drain() {
     const frame = readFrame();
     if (frame === NEED_MORE) return;
     if (frame === SKIP) continue;
-    await handleMessage(frame);
+    dispatch(frame);
   }
+}
+
+/**
+ * Разбирает вход, не дожидаясь конца обработки.
+ *
+ * Раньше цикл чтения ждал каждое сообщение до конца, и на время аудита сервер переставал
+ * читать stdin вообще. Обязательный по спецификации ping в этот момент оставался без
+ * ответа минуту и дольше, а клиент по нему решает, жив ли сервер: сессию убивали прямо
+ * посреди проверки. Ответы JSON-RPC сопоставляются по id, порядок прихода значения не
+ * имеет, поэтому короткие сообщения можно и нужно обслуживать сразу.
+ *
+ * Сами tools/call при этом остаются строго последовательными: два одновременных аудита
+ * это два Chrome и вдвое больше памяти, чего машина не выдержит.
+ */
+let toolChain = Promise.resolve();
+
+function dispatch(message) {
+  const run = () => handleMessage(message).catch((error) => {
+    process.stderr.write(`сбой обработки сообщения: ${error?.stack || error}\n`);
+  });
+  if (message?.method === 'tools/call') {
+    toolChain = toolChain.then(run);
+    return;
+  }
+  run();
 }
 
 function readFrame() {
@@ -126,7 +151,10 @@ async function handleMessage(message) {
     }
 
     if (message.method === 'tools/call') {
-      const result = await callTool(message.params?.name, message.params?.arguments ?? {});
+      // stdio значит локальный запуск: за клавиатурой владелец машины, он проверяет свой
+      // же сайт, в том числе localhost во время разработки. MCP_HOSTED=1 при необходимости
+      // включает сетевой режим и здесь.
+      const result = await callTool(message.params?.name, message.params?.arguments ?? {}, { remote: false });
       return sendResult(message.id, {
         content: [
           {

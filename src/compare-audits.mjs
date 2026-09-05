@@ -1,8 +1,18 @@
+/**
+ * Принимаем и сам результат аудита, и ответ audit_site целиком, ровно как planSafeFixes.
+ *
+ * В описании тула написано «результат аудита», и агент честно передаёт весь ответ
+ * audit_site, а проверки в нём лежат под ключом auditResult. Развёртки не было, checks не
+ * находились, и сравнение молча отвечало «исправлено 0, новых 0» при любых настоящих
+ * изменениях. Это худший вид поломки: не ошибка, а спокойный неверный ответ.
+ */
 export function compareAudits(before, after) {
-  const beforeSummary = before?.summary ?? {};
-  const afterSummary = after?.summary ?? {};
-  const beforeKeys = new Set((before?.checks ?? []).filter((check) => check.severity !== 'pass').map(issueKey));
-  const afterKeys = new Set((after?.checks ?? []).filter((check) => check.severity !== 'pass').map(issueKey));
+  const beforeResult = unwrapAuditResult(before);
+  const afterResult = unwrapAuditResult(after);
+  const beforeSummary = beforeResult.summary ?? {};
+  const afterSummary = afterResult.summary ?? {};
+  const beforeKeys = new Set((beforeResult.checks ?? []).filter((check) => check.severity !== 'pass').map(issueKey));
+  const afterKeys = new Set((afterResult.checks ?? []).filter((check) => check.severity !== 'pass').map(issueKey));
 
   const fixed = [...beforeKeys].filter((key) => !afterKeys.has(key));
   const newIssues = [...afterKeys].filter((key) => !beforeKeys.has(key));
@@ -27,7 +37,7 @@ export function compareAudits(before, after) {
     newIssues: newIssues.length,
     fixedIssueKeys: fixed.slice(0, 100),
     newIssueKeys: newIssues.slice(0, 100),
-    verdict: buildVerdict(beforeSummary, afterSummary, fixed.length, newIssues.length, after?.checks ?? [])
+    verdict: buildVerdict(beforeSummary, afterSummary, fixed.length, newIssues.length, afterResult.checks ?? [])
   };
 }
 
@@ -40,6 +50,12 @@ export function compareAudits(before, after) {
  * попадала сразу в оба списка: и в исправленные, и в новые. Сравнение сообщало «одну
  * исправили, одна новая» там, где просто стало немного лучше.
  */
+/** Разворачивает ответ audit_site до самого результата аудита. */
+function unwrapAuditResult(input) {
+  if (input?.checks) return input;
+  return input?.auditResult ?? input ?? {};
+}
+
 function issueKey(check) {
   return `${check.code}|${check.url}`;
 }

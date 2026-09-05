@@ -36,7 +36,18 @@ export async function collectBrowserDiagnostics(url, options = {}) {
   try {
     return await withBrowserSlot(() => runDiagnostics(url, options));
   } catch (error) {
-    return unavailable(normalizeUrl(url), String(error?.message ?? error));
+    // Адрес здесь уже нельзя разбирать тем же нормализатором: на пустой или битой строке
+    // он бросает, и обработчик ошибки падал сам. Показываем то, что прислали.
+    return unavailable(safeUrlLabel(url), String(error?.message ?? error));
+  }
+}
+
+/** Адрес для сообщения об ошибке. Никогда не бросает: это и есть его работа. */
+function safeUrlLabel(raw) {
+  try {
+    return normalizeUrl(raw);
+  } catch {
+    return String(raw ?? '');
   }
 }
 
@@ -122,6 +133,10 @@ async function probe(cdp, target, waitMs, formFactor) {
     droppedMessages += 1;
   };
   const requests = new Map();
+  // Доигранные хопы перенаправлений. Chrome шлёт повторное requestWillBeSent с тем же
+  // requestId, поэтому в Map они не помещаются: каждая следующая запись затирала
+  // предыдущую. Складываем их сюда.
+  const redirectHops = [];
   const startedAt = Date.now();
 
   cdp.on('Runtime.consoleAPICalled', (p) => {
@@ -158,12 +173,32 @@ async function probe(cdp, target, waitMs, formFactor) {
   });
 
   cdp.on('Network.requestWillBeSent', (p) => {
-    if (requests.size >= NETWORK_LIMIT) return;
+    // Перенаправление: то же событие приходит повторно с тем же requestId, а ответ
+    // предыдущего хопа лежит в redirectResponse. Раньше прежняя запись просто
+    // затиралась, и ни один 301 или 302 не попадал ни в HAR, ни в счётчики, а время
+    // документа считалось только по последнему хопу. Для сайтов на нашей платформе это
+    // самый обычный случай: http на https, потом с www на без www.
+    const previous = p.redirectResponse ? requests.get(p.requestId) : null;
+    if (previous) {
+      previous.status = p.redirectResponse.status ?? null;
+      previous.mimeType = p.redirectResponse.mimeType ?? '';
+      previous.bytes = p.redirectResponse.encodedDataLength ?? 0;
+      previous.ms = Math.round((p.timestamp - previous.startedAt) * 1000);
+      requests.delete(p.requestId);
+      redirectHops.push(previous);
+    }
+
+    // Потолок считаем по обоим хранилищам сразу, иначе цепочка перенаправлений тихо
+    // раздвинула бы предел в 500 записей.
+    if (requests.size + redirectHops.length >= NETWORK_LIMIT) return;
     requests.set(p.requestId, {
       url: p.request?.url ?? '',
       method: p.request?.method ?? 'GET',
       type: p.type ?? '',
       startedAt: p.timestamp,
+      // Часы стены, секунды с эпохи. p.timestamp монотонный, в дату он не переводится,
+      // а HAR требует настоящую метку старта у КАЖДОГО запроса.
+      wallTime: typeof p.wallTime === 'number' ? p.wallTime : null,
       status: null,
       mimeType: '',
       bytes: 0,
@@ -218,7 +253,9 @@ async function probe(cdp, target, waitMs, formFactor) {
   // немного: без этой паузы отчёт систематически недосчитывает аналитику и виджеты.
   await sleep(waitMs);
 
-  const list = [...requests.values()];
+  // startedAt это монотонные секунды из протокола, общие для всех запросов, поэтому
+  // сортировка по нему возвращает настоящий хронологический порядок.
+  const list = [...redirectHops, ...requests.values()].sort((a, b) => a.startedAt - b.startedAt);
   const failed = list.filter((r) => r.failed || (r.status && r.status >= 400));
   const byType = {};
   let totalBytes = 0;
@@ -260,7 +297,7 @@ async function probe(cdp, target, waitMs, formFactor) {
       droppedMessages ? `Страница выдала слишком много сообщений в консоль, в отчёт попали не все: пропущено ${droppedMessages}. Ошибки при этом сохранены в первую очередь.` : ''
     ].filter(Boolean).join(' '),
     droppedMessages,
-    har: buildHar(target, list),
+    har: buildHar(target, list, startedAt),
     // Консольный лог обычным текстом, как его сохраняет DevTools через «Save as».
     consoleLog: buildConsoleLog(target, consoleMessages, jsErrors),
     // base64, чтобы не таскать бинарь через JSON. Раскодируется при отдаче файла.
@@ -371,48 +408,68 @@ function buildConsoleLog(pageUrl, messages, jsErrors) {
  * адрес, статус, тип, размер и длительность. Заголовков и тел ответов здесь нет, они нам
  * для аудита не нужны, а тела к тому же раздули бы файл в десятки раз.
  */
-function buildHar(pageUrl, requests) {
-  const started = new Date().toISOString();
+/**
+ * Собирает HAR 1.2.
+ *
+ * Метка времени раньше бралась одна на всех, в момент сборки файла, то есть уже после
+ * загрузки страницы. В любом просмотрщике HAR это выглядело так, будто все запросы
+ * стартовали одновременно и в неверный момент: водопад схлопывался в одну точку и
+ * становился бесполезным. Плюс незавершённый запрос получал time -1 при timings в сумме
+ * ноль, а спецификация требует, чтобы time равнялся сумме timings.
+ */
+export function buildHar(pageUrl, requests, runStartedAt = Date.now()) {
+  // Запасная метка это начало прогона, а не его конец.
+  const started = new Date(runStartedAt).toISOString();
+  const stamp = (r) => (typeof r.wallTime === 'number' && r.wallTime > 0
+    ? new Date(r.wallTime * 1000).toISOString()
+    : started);
+  const pageStart = requests.length ? requests.map(stamp).sort()[0] : started;
+
   return {
     log: {
       version: '1.2',
       creator: { name: 'uCoz SEO Audit & Fix', version: '0.1.0' },
       pages: [{
-        startedDateTime: started,
+        startedDateTime: pageStart,
         id: 'page_1',
         title: pageUrl,
         pageTimings: { onContentLoad: -1, onLoad: -1 }
       }],
-      entries: requests.map((r) => ({
-        pageref: 'page_1',
-        startedDateTime: started,
-        time: typeof r.ms === 'number' ? r.ms : -1,
-        request: {
-          method: r.method || 'GET',
-          url: r.url,
-          httpVersion: 'HTTP/1.1',
-          cookies: [],
-          headers: [],
-          queryString: [],
-          headersSize: -1,
-          bodySize: -1
-        },
-        response: {
-          status: r.status ?? 0,
-          statusText: r.failed ? String(r.failed) : '',
-          httpVersion: 'HTTP/1.1',
-          cookies: [],
-          headers: [],
-          content: { size: r.bytes || 0, mimeType: r.mimeType || '' },
-          redirectURL: '',
-          headersSize: -1,
-          bodySize: r.bytes || 0
-        },
-        cache: {},
-        timings: { send: 0, wait: typeof r.ms === 'number' ? r.ms : 0, receive: 0 },
-        _resourceType: r.type || '',
-        _fromCache: Boolean(r.fromCache)
-      }))
+      entries: requests.map((r) => {
+        // У незавершённого запроса длительности нет. Ноль честнее минус единицы: минус
+        // единица противоречила бы сумме timings, которая в этом случае тоже ноль.
+        const wait = typeof r.ms === 'number' && r.ms >= 0 ? r.ms : 0;
+        return {
+          pageref: 'page_1',
+          startedDateTime: stamp(r),
+          time: wait,
+          request: {
+            method: r.method || 'GET',
+            url: r.url,
+            httpVersion: 'HTTP/1.1',
+            cookies: [],
+            headers: [],
+            queryString: [],
+            headersSize: -1,
+            bodySize: -1
+          },
+          response: {
+            status: r.status ?? 0,
+            statusText: r.failed ? String(r.failed) : '',
+            httpVersion: 'HTTP/1.1',
+            cookies: [],
+            headers: [],
+            content: { size: r.bytes || 0, mimeType: r.mimeType || '' },
+            redirectURL: '',
+            headersSize: -1,
+            bodySize: r.bytes || 0
+          },
+          cache: {},
+          timings: { send: 0, wait, receive: 0 },
+          _resourceType: r.type || '',
+          _fromCache: Boolean(r.fromCache)
+        };
+      })
     }
   };
 }

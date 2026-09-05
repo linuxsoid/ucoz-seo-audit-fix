@@ -10,6 +10,9 @@ export async function auditSite(startUrl, options = {}) {
    * обязательна, иначе перенаправление уводит наш сервер во внутреннюю сеть.
    */
   const guard = options.guard ?? null;
+  // Отмена сверху. withTimeout в веб-сервере умеет только проиграть гонку промисов, а сам
+  // обход без этого сигнала продолжал ходить по чужому сайту уже после ответа об ошибке.
+  const signal = options.signal ?? null;
   const origin = new URL(startUrl).origin;
   const queue = [normalizeUrl(startUrl)];
   const seen = new Set();
@@ -20,12 +23,21 @@ export async function auditSite(startUrl, options = {}) {
   const siteChecks = [...files.checks, ...(await auditTls(origin))];
 
   while (queue.length && pages.length < maxPages) {
+    signal?.throwIfAborted();
     const url = queue.shift();
     if (!url || seen.has(url)) continue;
     seen.add(url);
 
     const page = await fetchPage(url, guard);
     pages.push(page);
+
+    if (!page.html && !page.checks) {
+      // Ответ без HTML-тела: 3xx без рабочего Location, 4xx и 5xx с не-HTML телом.
+      // auditHtml по такому ответу не запускается, и страница уходила в отчёт вообще
+      // без единой проверки, то есть выглядела проверенной и беспроблемной. Условие
+      // на page.checks нужно, чтобы не затереть fetch_failed из ветки ошибки fetchPage.
+      page.checks = auditNonHtml(page);
+    }
 
     if (page.html) {
       const links = extractLinks(page.html, url);
@@ -68,6 +80,7 @@ export async function auditSite(startUrl, options = {}) {
     }
   }
 
+  signal?.throwIfAborted();
   const duplicateChecks = findDuplicates(pages);
   const brokenLinkChecks = await auditInternalLinks(pages, guard);
   const siteWideChecks = auditSiteWide(pages, origin);
@@ -361,6 +374,25 @@ async function fetchText(url, guard) {
   }
 }
 
+/**
+ * Проверки для ответа, у которого нет HTML-тела.
+ *
+ * Полноценный аудит по такому ответу невозможен, но молчать о нём нельзя: мёртвая
+ * страница попадала в отчёт как проверенная и чистая, и владелец сайта узнавал о ней
+ * от посетителей, а не от нас.
+ */
+function auditNonHtml(page) {
+  if (page.ok) return [];
+  if (page.status >= 300 && page.status < 400) {
+    return [issue('critical', 'page.bad_status', page.url,
+      `Страница отвечает перенаправлением ${page.status}, но идти по нему некуда: заголовок Location пустой или нерабочий.`,
+      'Укажите в Location полный адрес назначения или уберите перенаправление.')];
+  }
+  return [issue('critical', 'page.bad_status', page.url,
+    `Страница возвращает HTTP ${page.status}.`,
+    'Исправьте ответ сервера или цепочку редиректов.')];
+}
+
 function auditHtml(page, links) {
   const html = page.html;
   const checks = [];
@@ -491,7 +523,11 @@ function findDuplicates(pages) {
   const distinct = [];
   const seenFinal = new Set();
   for (const page of pages) {
-    const key = page.finalUrl || page.url;
+    // Адрес нормализуем тем же способом, что и проверка links.redirected.
+    // Сырая строка означала, что https://site/about и https://site/about/ считались
+    // разными страницами, и правильный 301 давал ложный critical о дублирующихся
+    // title и description на сайте, где никаких дублей нет.
+    const key = normalizeForCompare(page.finalUrl || page.url);
     if (seenFinal.has(key)) continue;
     seenFinal.add(key);
     distinct.push(page);

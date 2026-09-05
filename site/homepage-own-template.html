@@ -1022,7 +1022,10 @@ npm install --omit=dev</code></pre>
           if (hidden) { box.removeAttribute('hidden'); } else { box.setAttribute('hidden', ''); }
           showRest.textContent = hidden
             ? 'Скрыть остальные замечания'
-            : 'Показать остальные замечания (' + (box.querySelectorAll('li').length) + ')';
+            // Число берём из данных, а не пересчитываем по разметке: поиск пунктов списка
+            // захватывает и вложенные списки адресов страниц, поэтому после закрытия подпись
+            // показывала не то число, с которого начинала.
+            : 'Показать остальные замечания (' + (data.issues || []).length + ')';
           showRest.setAttribute('aria-expanded', hidden ? 'true' : 'false');
         });
       }

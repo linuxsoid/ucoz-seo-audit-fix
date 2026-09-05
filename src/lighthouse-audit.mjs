@@ -116,7 +116,18 @@ export async function runLighthouseAudit(url, options = {}) {
   try {
     return await withBrowserSlot(() => runLighthouseInternal(url, options));
   } catch (error) {
-    return unavailableResult(normalizeTargetUrl(url), String(error?.message ?? error));
+    // normalizeTargetUrl бросает на пустом и на битом адресе, поэтому в обработчике
+    // ошибки его звать нельзя: вместо понятного отказа наружу улетал сырой Invalid URL.
+    return unavailableResult(safeUrlLabel(url), String(error?.message ?? error));
+  }
+}
+
+/** Адрес для сообщения об ошибке. Никогда не бросает: это и есть его работа. */
+function safeUrlLabel(raw) {
+  try {
+    return normalizeTargetUrl(raw);
+  } catch {
+    return String(raw ?? '');
   }
 }
 

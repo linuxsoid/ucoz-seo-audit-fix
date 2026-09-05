@@ -33,6 +33,11 @@ const EN = {
   'meta.title_ok': ['Title present', ''],
   'meta.description_missing': ['Missing meta description', 'Add a unique page description.'],
   'meta.description_length': ['Description length outside the usual range', 'Aim for roughly 50 to 170 characters.'],
+  // Дубли title и description это самая частая критичная находка на сайтах конструкторов,
+  // и без этих двух строк английское задание агенту приходило с русским текстом ровно там,
+  // где чаще всего и нужно.
+  'meta.title_duplicate': ['The same title is used on several pages', 'Give every page its own title.'],
+  'meta.description_duplicate': ['The same meta description is used on several pages', 'Give every page its own description.'],
   'meta.description_ok': ['Meta description present', ''],
   'meta.canonical_missing': ['Missing canonical link', 'Add a canonical URL if the page can be duplicated.'],
   'meta.viewport_missing': ['Missing viewport meta tag', 'Add the viewport meta tag, otherwise mobile rendering breaks.'],

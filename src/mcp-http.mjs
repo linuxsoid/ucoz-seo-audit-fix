@@ -103,14 +103,13 @@ export async function handleMcpRequest(req, res) {
   if (!isOriginAllowed(origin)) {
     return sendJson(res, 403, jsonRpcError(null, -32600, 'Origin не разрешён.'), origin);
   }
-  if (MCP_TOKEN) {
-    const auth = String(req.headers.authorization || '');
-    if (auth !== `Bearer ${MCP_TOKEN}`) {
-      res.writeHead(401, { 'www-authenticate': 'Bearer', 'content-type': 'application/json' });
-      return res.end(JSON.stringify(jsonRpcError(null, -32001, 'Нужен корректный bearer-токен.')));
-    }
-  }
-
+  // Preflight отвечаем ДО проверки токена.
+  //
+  // Браузер по спецификации CORS не кладёт в preflight ни Authorization, ни тело. Пока
+  // проверка токена стояла выше, OPTIONS получал 401, браузер до настоящего POST не
+  // доходил вовсе, и при заданном MCP_TOKEN браузерный клиент подключиться не мог. То
+  // есть ломался ровно тот сценарий, ради которого сетевой транспорт и делался. Данных
+  // preflight не отдаёт, а Origin уже проверен выше.
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       ...corsHeaders(origin),
@@ -119,6 +118,20 @@ export async function handleMcpRequest(req, res) {
       'access-control-max-age': '86400'
     });
     return res.end();
+  }
+
+  if (MCP_TOKEN) {
+    const auth = String(req.headers.authorization || '');
+    if (auth !== `Bearer ${MCP_TOKEN}`) {
+      // CORS-заголовки нужны и здесь, иначе браузер вместо понятного «нужен токен»
+      // покажет глухой сбой CORS, и человек будет искать не ту причину.
+      res.writeHead(401, {
+        'www-authenticate': 'Bearer',
+        'content-type': 'application/json',
+        ...corsHeaders(origin)
+      });
+      return res.end(JSON.stringify(jsonRpcError(null, -32001, 'Нужен корректный bearer-токен.')));
+    }
   }
 
   // Поток от сервера к клиенту мы не предлагаем, поэтому GET честно отвечает 405.
@@ -197,7 +210,9 @@ async function handleMessage(message) {
         return jsonRpcError(message.id, -32601,
           `Тул ${name} недоступен в удалённом режиме: ему нужен локальный Chrome или доступ к вашей файловой системе. Поставьте пакет локально, если он нужен.`);
       }
-      const result = await callTool(name, message.params?.arguments ?? {});
+      // Транспорт сетевой: адрес присылает посторонний, поэтому проверяем каждый адрес,
+      // по которому пойдём, и держим потолок страниц.
+      const result = await callTool(name, message.params?.arguments ?? {}, { remote: true });
       return {
         jsonrpc: '2.0',
         id: message.id,

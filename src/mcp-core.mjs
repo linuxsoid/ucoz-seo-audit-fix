@@ -181,11 +181,34 @@ export const tools = [
  * C:\...\reports\seo-report.json бессмысленно: этого файла у него нет.
  * Поэтому здесь отчёт возвращается текстом прямо в ответе.
  */
-const REMOTE_MODE = process.env.MCP_HOSTED === '1';
+/*
+ * Раньше режим определялся ТОЛЬКО переменной MCP_HOSTED, и это было ошибкой. От того же
+ * флага зависела проверка адреса: без него audit_site через сетевой транспорт ходил куда
+ * угодно, включая 127.0.0.1 и служебные адреса облака. То есть защита включалась, только
+ * если человек не забыл выставить переменную окружения. Теперь режим задаёт транспорт:
+ * HTTP по определению значит, что адрес прислал посторонний, stdio значит, что за
+ * клавиатурой владелец машины. MCP_HOSTED остался принудительным включением сетевого
+ * режима, но больше не является единственным, что стоит между публичным сервисом и
+ * нашей внутренней сетью.
+ */
+const FORCE_REMOTE = process.env.MCP_HOSTED === '1';
 
-async function deliverReports(result, format) {
-  if (!REMOTE_MODE) {
-    return { reportFiles: await writeReports(result, { format: format ?? 'all' }) };
+async function deliverReports(result, format, remote) {
+  if (!remote) {
+    try {
+      return { reportFiles: await writeReports(result, { format: format ?? 'all' }) };
+    } catch (error) {
+      // Аудит уже сделан, обход сайта занял минуты. Ронять из-за каталога весь готовый
+      // результат нельзя. MCP-хосты запускают stdio-сервер с произвольной текущей папкой:
+      // у Claude Desktop на Windows это системный каталог, где создать reports не дают, и
+      // клиент вместо отчёта получал -32000 со стеком. Файлов не будет, но выводы отдадим
+      // текстом в том же ответе.
+      return {
+        reportFiles: [],
+        reportWriteError: `Отчёт не удалось записать на диск (${error.code || 'ошибка'}: ${error.message}). Выводы ниже, в поле report.`,
+        report: { markdown: toMarkdown(result) }
+      };
+    }
   }
   // По умолчанию отдаём только markdown. HTML это те же выводы, обёрнутые в разметку
   // страницы: сорок с лишним килобайт, которые в контексте модели ничего не добавляют,
@@ -281,8 +304,8 @@ function trimBrowser(browser) {
  * Локально проверка не нужна и мешала бы: там человек проверяет свой же сайт на своей же
  * машине, в том числе на localhost во время разработки.
  */
-async function auditTarget(url) {
-  return REMOTE_MODE ? resolveSafeTarget(url) : String(url ?? '');
+async function auditTarget(url, remote) {
+  return remote ? resolveSafeTarget(url) : String(url ?? '');
 }
 
 /**
@@ -295,26 +318,35 @@ async function auditTarget(url) {
  * pages.length < NaN это false с первой же итерации. Тул отвечал «успешно» и нулём
  * обойдённых страниц, что выглядело как исправный ответ.
  */
-function pageLimit(value) {
+function pageLimit(value, remote) {
   const asked = Number(value);
-  const fallback = REMOTE_MODE ? 8 : 25;
+  const fallback = remote ? 8 : 25;
   const limit = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : fallback;
-  return REMOTE_MODE ? Math.min(limit, 20) : Math.min(limit, 200);
+  return remote ? Math.min(limit, 20) : Math.min(limit, 200);
 }
 
-export async function callTool(name, args) {
+/**
+ * Вызов тула.
+ *
+ * options.remote говорит, пришёл ли вызов по сети. Значение по умолчанию именно true:
+ * забытый параметр должен давать защиту, а не дыру. Локальный режим включает только
+ * stdio-транспорт, и он передаёт remote: false явно.
+ */
+export async function callTool(name, args, options = {}) {
+  const remote = (options.remote ?? true) || FORCE_REMOTE;
+
   if (name === 'audit_site') {
-    const result = await auditSite(await auditTarget(args.url), {
-      maxPages: pageLimit(args.maxPages),
+    const result = await auditSite(await auditTarget(args.url, remote), {
+      maxPages: pageLimit(args.maxPages, remote),
       lighthouse: Boolean(args.lighthouse),
       lighthouseFormFactor: args.lighthouseFormFactor ?? 'mobile',
       lighthouseCategories: args.lighthouseCategories,
       lighthouseOutput: ['json', 'html'],
       // В удалённом режиме проверяем каждый адрес, по которому идём. Локально этого не
       // требуется: там адрес вводит сам владелец машины.
-      guard: REMOTE_MODE ? assertSafeUrl : null
+      guard: remote ? assertSafeUrl : null
     });
-    const delivered = await deliverReports(result, args.format);
+    const delivered = await deliverReports(result, args.format, remote);
     // Один и тот же объект под русским и английским ключом это буквально двойной вес
     // ответа. Отдаём его один раз, английский ключ ссылается на тот же объект.
     return {
@@ -353,7 +385,7 @@ export async function callTool(name, args) {
 
   if (name === 'audit_html_bundle') {
     const result = auditHtmlBundle(args.items ?? [], { baseUrl: args.baseUrl ?? '' });
-    const delivered = await deliverReports(result, args.format);
+    const delivered = await deliverReports(result, args.format, remote);
     return {
       'сводка': result.summary,
       'провереноФрагментов': result.pages.length,

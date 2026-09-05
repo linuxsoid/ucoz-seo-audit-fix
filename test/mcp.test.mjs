@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tools } from '../src/mcp-core.mjs';
@@ -47,7 +48,20 @@ function runStdio(input, { timeoutMs = 15000 } = {}) {
     const timer = setTimeout(() => done('таймаут'), timeoutMs);
     child.on('exit', () => done('процесс завершился'));
 
+    // Ошибку записи в stdin глотаем сознательно.
+    //
+    // Под нагрузкой (а весь набор тестов идёт параллельно) ребёнок иногда успевает
+    // умереть раньше, чем мы допишем в его stdin. Необработанное EPIPE роняло не тест,
+    // а сам процесс файла тестов: набор падал целиком, при этом ни один отдельный тест
+    // не показывал not ok, а по одному файлу всё проходило. Классический плавающий тест.
+    child.stdin.on('error', () => { /* ребёнок закрылся раньше, разберёмся по ответам */ });
     child.stdin.write(input);
+
+    // Закрываем ввод сразу. Сервер по спецификации завершается на конце stdin, и мы
+    // получаем ответы через exit за сотню миллисекунд. Раньше ввод оставался открытым,
+    // и КАЖДЫЙ тест этого файла честно выжидал таймаут: тринадцать тестов по пятнадцать
+    // секунд. Проверено: на конце stdin сервер отвечает и выходит с кодом 0.
+    child.stdin.end();
   });
 }
 
@@ -186,4 +200,39 @@ test('stdio отвечает на ping, а не ошибкой «метод не
   assert.ok(answer, 'на ping сервер не ответил');
   assert.ok(!answer.error, `на ping пришла ошибка: ${JSON.stringify(answer.error)}`);
   assert.deepEqual(answer.result, {});
+});
+
+test('сетевой режим включён по умолчанию: callTool без параметров не ходит на внутренний адрес', async () => {
+  // Раньше защита от SSRF включалась переменной MCP_HOSTED. Без неё публичный /mcp
+  // соглашался сходить на 127.0.0.1 и вернуть выводы о внутренней странице. То есть
+  // единственное, что стояло между интернетом и нашей сетью, это память человека,
+  // выставившего переменную окружения. Здесь закрепляем обратное: забытый параметр
+  // должен давать защиту, а не дыру.
+  assert.notEqual(process.env.MCP_HOSTED, '1',
+    'тест теряет смысл при MCP_HOSTED=1: тогда режим включён принудительно');
+
+  const { callTool } = await import('../src/mcp-core.mjs');
+  await assert.rejects(
+    () => callTool('audit_site', { url: 'http://127.0.0.1:8099/', maxPages: 1 }),
+    (error) => {
+      assert.match(String(error.message), /порт|адрес|локальн|внутренн/i,
+        `ожидали отказ проверки адреса, получили: ${error.message}`);
+      return true;
+    },
+    'вызов без options должен считаться сетевым и отказать на внутреннем адресе'
+  );
+});
+
+test('локальный режим остаётся локальным: stdio передаёт remote false явно', async () => {
+  // Обратная сторона той же правки. Человек, который проверяет свой сайт на localhost во
+  // время разработки, не должен получать отказ. Проверяем не поведение аудита, а то, что
+  // транспорт stdio действительно объявляет себя локальным: иначе правка молча сломала бы
+  // единственный сценарий, ради которого послабление и существует.
+  const source = await readFile(join(ROOT, 'src', 'mcp-server.mjs'), 'utf8');
+  assert.match(source, /callTool\([^)]*\{ remote: false \}\)/s,
+    'stdio-транспорт должен вызывать callTool с remote: false');
+
+  const http = await readFile(join(ROOT, 'src', 'mcp-http.mjs'), 'utf8');
+  assert.match(http, /callTool\([^)]*\{ remote: true \}\)/s,
+    'HTTP-транспорт должен вызывать callTool с remote: true');
 });

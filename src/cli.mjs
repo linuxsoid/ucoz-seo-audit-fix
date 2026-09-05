@@ -52,8 +52,25 @@ if (command === 'audit') {
     process.exit(1);
   }
 
-  const maxPages = Number(getFlag('--max-pages', 25));
+  // Мусор во флаге раньше проходил молча и дважды давал ложно-зелёный результат.
+  // Нечисловой --max-pages превращался в NaN, а `pages.length < NaN` это false с первой
+  // же итерации: обход не начинался, и CLI печатал бодрый отчёт по нулю страниц с кодом
+  // выхода 0. Неизвестный --format не писал ни одного файла, тоже с кодом 0. Флаг вводит
+  // человек прямо в этой команде, поэтому честнее сказать ему об опечатке, чем обойти её.
+  const askedPages = getFlag('--max-pages', 25);
+  const maxPagesNumber = Number(askedPages);
+  if (!Number.isFinite(maxPagesNumber) || maxPagesNumber < 1) {
+    console.error(`--max-pages: нужно целое число больше нуля, получено «${askedPages}».`);
+    process.exit(1);
+  }
+  const maxPages = Math.min(Math.floor(maxPagesNumber), 200);
+
+  const FORMATS = ['all', 'json', 'markdown', 'html'];
   const format = String(getFlag('--format', 'all'));
+  if (!FORMATS.includes(format)) {
+    console.error(`--format: допустимы ${FORMATS.join(', ')}, получено «${format}».`);
+    process.exit(1);
+  }
   const failOnCritical = args.includes('--fail-on-critical');
   const withLighthouse = args.includes('--lighthouse');
   const lighthouseFormFactor = String(getFlag('--lighthouse-form-factor', 'mobile'));

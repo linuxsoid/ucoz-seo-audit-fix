@@ -286,3 +286,61 @@ test('страница со ссылками только на файлы счи
   assert.ok(codes.includes('links.internal_missing'),
     'страница, с которой некуда перейти, должна быть замечена');
 });
+
+test('compare_audits понимает ответ audit_site целиком, а не только распакованный результат', () => {
+  // В описании тула написано «результат аудита», и агент передаёт весь ответ audit_site.
+  // Проверки в нём лежат под ключом auditResult. Развёртки не было, checks не находились,
+  // и сравнение спокойно отвечало «исправлено 0, новых 0» на любых настоящих изменениях.
+  // Это худший вид поломки: не падение, а тихий неверный ответ.
+  const before = {
+    summary: { critical: 2, recommended: 0, passed: 0 },
+    checks: [
+      { code: 'meta.title_missing', severity: 'critical', url: 'https://example.com/' },
+      { code: 'meta.description_missing', severity: 'critical', url: 'https://example.com/' }
+    ]
+  };
+  const after = {
+    summary: { critical: 0, recommended: 0, passed: 2 },
+    checks: [
+      { code: 'meta.title_ok', severity: 'pass', url: 'https://example.com/' },
+      { code: 'meta.description_ok', severity: 'pass', url: 'https://example.com/' }
+    ]
+  };
+
+  const plain = compareAudits(before, after);
+  assert.equal(plain.fixedIssues, 2, 'на распакованном входе сравнение и раньше работало');
+
+  // Ровно та форма, которую отдаёт audit_site и которую передаёт агент.
+  const wrapped = compareAudits(
+    { summary: before.summary, auditResult: before },
+    { summary: after.summary, auditResult: after }
+  );
+  assert.equal(wrapped.fixedIssues, 2,
+    'обёрнутый ответ audit_site должен давать тот же вывод, что и распакованный');
+  assert.deepEqual(wrapped.fixedIssueKeys.sort(), plain.fixedIssueKeys.sort());
+  assert.equal(wrapped.newIssues, 0, 'новых замечаний в этом сценарии нет');
+  assert.match(wrapped.verdict, /\S/, 'вердикт должен быть непустым');
+});
+
+test('превью правки шаблона показывает только вставленное, а не весь файл', async () => {
+  // Строки сравнивались по номеру. Вставка сдвигает всё, что ниже, поэтому дифф объявлял
+  // изменёнными ВСЕ последующие строки: превью выглядело как «стираем файл целиком», а в
+  // ответ тула уходило полное содержимое файла. На чужом файле это ещё и утечка.
+  const { fixTemplateContent } = await import('../src/template-fix.mjs');
+
+  const body = Array.from({ length: 120 }, (_, i) => `<p>строка ${i}</p>`).join('\n');
+  const html = `<html>\n<head>\n<title>Магазин</title>\n</head>\n<body>\n${body}\n</body>\n</html>`;
+
+  const preview = fixTemplateContent(html, { name: 'main.html' });
+  assert.ok(preview.diff, 'правка должна быть, у страницы нет viewport и og-разметки');
+
+  const removed = preview.diff.split('\n').filter((l) => l.startsWith('-') && !l.startsWith('---'));
+  assert.deepEqual(removed, [], 'вставка ничего не удаляет, минусовых строк быть не должно');
+
+  assert.equal(preview.diff.includes('<p>строка 60</p>'), false,
+    'нетронутые строки файла не должны попадать в дифф');
+
+  const added = preview.diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
+  assert.ok(added.length > 0 && added.length < 10,
+    `ожидали несколько добавленных строк, получили ${added.length}`);
+});

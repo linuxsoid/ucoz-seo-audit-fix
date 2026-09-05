@@ -94,20 +94,44 @@ function escapeAttr(value) {
   })[char]);
 }
 
+/**
+ * Показывает, что именно меняется в шаблоне.
+ *
+ * Строки сравнивались по номеру, а правка здесь это вставка: одна добавленная строка
+ * сдвигает вниз весь остаток файла, и сравнение по номеру объявляло изменёнными ВСЕ
+ * строки после места вставки. На шаблоне в двести строк превью выглядело так, будто мы
+ * стираем файл целиком и пишем заново, а в ответ тула уходило полное содержимое файла.
+ *
+ * Отрезаем совпадающее начало и совпадающий конец. Остаётся изменённая середина, а для
+ * вставки это ровно вставленные строки и ни одной лишней.
+ */
 function createUnifiedDiff(before, after, name) {
   if (before === after) return '';
   const beforeLines = before.split(/\r?\n/);
   const afterLines = after.split(/\r?\n/);
-  const max = Math.max(beforeLines.length, afterLines.length);
-  const lines = [`--- ${name}`, `+++ ${name}`];
 
-  for (let index = 0; index < max; index += 1) {
-    const left = beforeLines[index];
-    const right = afterLines[index];
-    if (left === right) continue;
-    if (left !== undefined) lines.push(`-${left}`);
-    if (right !== undefined) lines.push(`+${right}`);
+  let head = 0;
+  while (head < beforeLines.length && head < afterLines.length
+    && beforeLines[head] === afterLines[head]) {
+    head += 1;
   }
+
+  let tail = 0;
+  while (tail < beforeLines.length - head && tail < afterLines.length - head
+    && beforeLines[beforeLines.length - 1 - tail] === afterLines[afterLines.length - 1 - tail]) {
+    tail += 1;
+  }
+
+  const removed = beforeLines.slice(head, beforeLines.length - tail);
+  const added = afterLines.slice(head, afterLines.length - tail);
+
+  const lines = [
+    `--- ${name}`,
+    `+++ ${name}`,
+    `@@ -${removed.length ? head + 1 : head},${removed.length} +${added.length ? head + 1 : head},${added.length} @@`
+  ];
+  for (const line of removed) lines.push(`-${line}`);
+  for (const line of added) lines.push(`+${line}`);
 
   return lines.join('\n');
 }

@@ -575,51 +575,73 @@ async function handleAudit(req, res) {
     });
   }
 
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch (error) {
-    return sendJson(res, 400, { error: String(error.message) });
-  }
-
-  let target;
-  try {
-    target = await resolveSafeTarget(body?.url);
-  } catch (error) {
-    return sendJson(res, 400, { error: String(error.message) });
-  }
-
+  // Слот занимаем ЗДЕСЬ, а не после разбора тела.
+  //
+  // Раньше между проверкой и захватом стояли два await: чтение тела и проверка адреса.
+  // Node за это время успевает принять другие запросы, и все они видят одно и то же
+  // running. Достаточно было придержать тело запроса, чтобы десяток проверок прошли
+  // гейт одновременно и начали обход разом. Между строкой сравнения и строкой захвата
+  // теперь нет ни одного await, поэтому окна нет.
   running += 1;
-  const startedAt = Date.now();
+
+  // Отмена сверху. Без неё таймаут только проигрывал гонку промисов: слот освобождался,
+  // человеку уходила ошибка, а обход продолжал ходить по чужому сайту ещё минуту.
+  const cancel = new AbortController();
+
   try {
-    const result = await withTimeout(
-      auditSite(target, { maxPages: MAX_PAGES, lighthouse: false, guard: assertSafeUrl }),
-      AUDIT_TIMEOUT_MS,
-      'Проверка заняла слишком много времени. Сайт отвечает медленно.'
-    );
-    const sessionId = rememberAudit(result);
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      return sendJson(res, 400, { error: String(error.message) });
+    }
 
-    // Отчёт собираем уже здесь, по одной первой части.
-    //
-    // Так было не всегда, и это было прямой поломкой: файлы появлялись только после
-    // второй части, а если она падала, человек после минуты ожидания получал красную
-    // плашку и ноль файлов. При этом на экране ему было обещано обратное. Теперь отчёт
-    // по первой части существует сразу, а вторая часть его достраивает.
-    rememberArtifacts(sessionId, buildArtifacts(result, {
-      humanMd: toMarkdown(result),
-      humanHtml: toHtml(result),
-      agentMdRu: toAgentMarkdown(result, { lang: 'ru' }),
-      agentMdEn: toAgentMarkdown(result, { lang: 'en' })
-    }, null, null));
+    let target;
+    try {
+      target = await resolveSafeTarget(body?.url);
+    } catch (error) {
+      return sendJson(res, 400, { error: String(error.message) });
+    }
 
-    return sendJson(res, 200, {
-      sessionId,
-      ...compactResult(result, Date.now() - startedAt),
-      result: bundleInfo(sessionId)
-    });
-  } catch (error) {
-    return sendJson(res, 502, { error: String(error?.message ?? error) });
+    const startedAt = Date.now();
+    try {
+      const result = await withTimeout(
+        auditSite(target, {
+          maxPages: MAX_PAGES,
+          lighthouse: false,
+          guard: assertSafeUrl,
+          signal: cancel.signal
+        }),
+        AUDIT_TIMEOUT_MS,
+        'Проверка заняла слишком много времени. Сайт отвечает медленно.'
+      );
+      const sessionId = rememberAudit(result);
+
+      // Отчёт собираем уже здесь, по одной первой части.
+      //
+      // Так было не всегда, и это было прямой поломкой: файлы появлялись только после
+      // второй части, а если она падала, человек после минуты ожидания получал красную
+      // плашку и ноль файлов. При этом на экране ему было обещано обратное. Теперь отчёт
+      // по первой части существует сразу, а вторая часть его достраивает.
+      rememberArtifacts(sessionId, buildArtifacts(result, {
+        humanMd: toMarkdown(result),
+        humanHtml: toHtml(result),
+        agentMdRu: toAgentMarkdown(result, { lang: 'ru' }),
+        agentMdEn: toAgentMarkdown(result, { lang: 'en' })
+      }, null, null));
+
+      return sendJson(res, 200, {
+        sessionId,
+        ...compactResult(result, Date.now() - startedAt),
+        result: bundleInfo(sessionId)
+      });
+    } catch (error) {
+      return sendJson(res, 502, { error: String(error?.message ?? error) });
+    }
   } finally {
+    // Слот отдаём только вместе с остановкой обхода, иначе running перестаёт отражать
+    // настоящую нагрузку на сервер.
+    cancel.abort();
     running -= 1;
   }
 }
@@ -696,16 +718,26 @@ async function handleDeepAudit(req, res) {
     // чтобы скачанный файл содержал ВСЁ, а не половину.
     let reports = null;
     const base = recallAudit(body?.sessionId);
-    if (base && lighthouse?.available) {
-      base.lighthouse = lighthouse;
-      const extra = lighthouseChecksFromResult(lighthouse);
-      // Второй прогон не должен задваивать замечания Lighthouse в отчёте.
-      base.checks = [...base.checks.filter((check) => !String(check.code).startsWith('lighthouse.')), ...extra];
-      base.summary = {
-        critical: base.checks.filter((c) => c.severity === 'critical').length,
-        recommended: base.checks.filter((c) => c.severity === 'recommended').length,
-        passed: base.checks.filter((c) => c.severity === 'pass').length
-      };
+    if (base) {
+      if (lighthouse?.available) {
+        base.lighthouse = lighthouse;
+        const extra = lighthouseChecksFromResult(lighthouse);
+        // Второй прогон не должен задваивать замечания Lighthouse в отчёте.
+        base.checks = [...base.checks.filter((check) => !String(check.code).startsWith('lighthouse.')), ...extra];
+        base.summary = {
+          critical: base.checks.filter((c) => c.severity === 'critical').length,
+          recommended: base.checks.filter((c) => c.severity === 'recommended').length,
+          passed: base.checks.filter((c) => c.severity === 'pass').length
+        };
+      }
+
+      // Отчёты пересобираем ВСЕГДА, а не только при живом Lighthouse.
+      //
+      // Раньше это условие стояло на всём блоке, а ниже набор файлов сессии заменялся
+      // целиком. То есть при недоступном Lighthouse глубокая часть затирала то, что уже
+      // собрала быстрая: из архива пропадали оба отчёта для человека и оба задания
+      // агенту, а страница отчёта отвечала «Отчёт больше недоступен». Именно этот случай
+      // и происходит на нашем сервере, когда не хватает памяти на Chrome.
       reports = {
         humanMd: toMarkdown(base),
         humanHtml: toHtml(base),
@@ -997,6 +1029,10 @@ const form = document.getElementById('f');
 const input = document.getElementById('u');
 const button = document.getElementById('b');
 const out = document.getElementById('out');
+// Витрину монтируют по префиксу (на нашем стенде это /seo/), а адреса были абсолютными:
+// со страницы /seo/ форма стучалась в /api/audit, то есть в корень чужого сайта, и
+// проверка не запускалась вообще. Считаем префикс от адреса открытой страницы.
+const BASE = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -1005,7 +1041,7 @@ form.addEventListener('submit', async (event) => {
   out.innerHTML = '<div class="msg">Обхожу страницы, это несколько секунд.</div>';
 
   try {
-    const response = await fetch('/api/audit', {
+    const response = await fetch(BASE + 'api/audit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url: input.value })
@@ -1039,7 +1075,7 @@ function render(data) {
     '<div class="cta"><b>Часть найденных проблем можно исправить автоматически.</b><br>' +
     'Поставьте MCP себе в Codex, Cursor или Claude, подключите свой uCoz-сайт по токену, ' +
     'и после подтверждения система применит подготовленные изменения и покажет diff до записи. ' +
-    '<a href="/#install">Как подключить</a></div>';
+    '<a href="' + BASE + '#install">Как подключить</a></div>';
 
   out.innerHTML = cards + issues + cta;
 }
