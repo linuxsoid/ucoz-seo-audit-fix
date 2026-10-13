@@ -166,3 +166,33 @@ test('в слепок не попадает содержимое чужих ст
   });
   assert.equal(JSON.stringify(snap).includes('секретный'), false);
 });
+
+test('замечания на страницах, впервые попавших в обход, не считаются новыми поломками', () => {
+  // Так было на нашем же сайте: после починки sitemap обход дошёл до семи новых страниц,
+  // и история написала «появилось 87», хотя сайт ни в чём не стал хуже.
+  const before = snapshotOf({ ...result([desc('https://s/')]), pages: [{ url: 'https://s/' }] });
+  const after = snapshotOf({
+    ...result([desc('https://s/'), desc('https://s/new1'), og('https://s/new2')]),
+    pages: [{ url: 'https://s/' }, { url: 'https://s/new1' }, { url: 'https://s/new2' }]
+  });
+  const diff = diffSnapshots(before, after);
+  assert.equal(diff.appeared, 0, 'на старых страницах ничего не сломалось');
+  assert.equal(diff.newPages, 2);
+  assert.equal(diff.newPagesIssues, 2);
+});
+
+test('страница выпала из обхода: её замечания не считаются исправленными', () => {
+  const before = snapshotOf({
+    ...result([desc('https://s/'), desc('https://s/gone')]),
+    pages: [{ url: 'https://s/' }, { url: 'https://s/gone' }]
+  });
+  const after = snapshotOf({ ...result([desc('https://s/')]), pages: [{ url: 'https://s/' }] });
+  assert.equal(diffSnapshots(before, after).fixed, 0);
+});
+
+test('настоящая новая поломка на старой странице по-прежнему видна', () => {
+  // Контрольный опыт к двум тестам выше: учёт новых страниц не должен глушить всё подряд.
+  const before = snapshotOf({ ...result([]), pages: [{ url: 'https://s/' }] });
+  const after = snapshotOf({ ...result([desc('https://s/')]), pages: [{ url: 'https://s/' }] });
+  assert.equal(diffSnapshots(before, after).appeared, 1);
+});

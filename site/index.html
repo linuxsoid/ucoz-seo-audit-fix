@@ -1048,10 +1048,18 @@ npm install --omit=dev</code></pre>
       var when = formatDate(history.previous.scannedAt);
       var d = history.diff;
 
+      // Обход мог дойти до страниц, которых в прошлый раз не видел. Их замечания не
+      // «новые проблемы», и говорить надо отдельно, иначе человек решит, что сайт сломался.
+      var widened = d.newPages
+        ? '<div class="why">В этот раз проверка дошла ещё до ' + d.newPages + ' ' +
+          plural(d.newPages, 'страницы', 'страниц', 'страниц') + ', которых не было в прошлой. ' +
+          'Замечания на них (' + (d.newPagesIssues || 0) + ') в разницу не входят: это не новые ' +
+          'поломки, просто раньше мы их не видели.</div>'
+        : '';
+
       if (!d.fixed && !d.appeared) {
         return '<div class="check-msg" style="margin-bottom:14px"><b>С прошлой проверки ' +
-          escapeHtml(when) + ' ничего не изменилось.</b>' +
-          '<div class="why">Те же проблемы на тех же страницах.</div></div>';
+          escapeHtml(when) + ' на тех же страницах ничего не изменилось.</b>' + widened + '</div>';
       }
 
       var parts = [];
@@ -1070,6 +1078,7 @@ npm install --omit=dev</code></pre>
       return '<div class="check-msg' + (d.appeared && !d.fixed ? ' bad' : '') + '" style="margin-bottom:14px">' +
         '<b>С прошлой проверки ' + escapeHtml(when) + ': ' + parts.join(', ') + '.</b>' +
         (good ? '<div class="why">Правки сработали.</div>' : '') +
+        widened +
         list('Ушло', d.fixedByCode) +
         list('Появилось', d.appearedByCode) +
         '</div>';

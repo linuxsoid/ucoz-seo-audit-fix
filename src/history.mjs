@@ -65,6 +65,11 @@ export function snapshotOf(result) {
   return {
     scannedAt: result.scannedAt ?? new Date().toISOString(),
     pagesScanned: (result.pages ?? []).length,
+    // Какие страницы вошли в проверку. Без этого разница врёт: если в этот раз обход
+    // дошёл до новых страниц, все их замечания выглядели бы как «появилось», хотя сайт
+    // не стал хуже. Ровно так и случилось на нашем же сайте после починки sitemap:
+    // «появилось 87».
+    pages: (result.pages ?? []).map((page) => page.url).filter(Boolean).slice(0, 200),
     summary: {
       critical: result.summary?.critical ?? 0,
       recommended: result.summary?.recommended ?? 0,
@@ -86,8 +91,27 @@ export function diffSnapshots(before, after) {
   const beforeKeys = new Map((before?.issues ?? []).map((issue) => [issue.key, issue]));
   const afterKeys = new Map((after?.issues ?? []).map((issue) => [issue.key, issue]));
 
-  const fixed = [...beforeKeys.values()].filter((issue) => !afterKeys.has(issue.key));
-  const appeared = [...afterKeys.values()].filter((issue) => !beforeKeys.has(issue.key));
+  // Старые слепки без списка страниц сравниваем как раньше, все замечания сравнимы.
+  const beforePages = Array.isArray(before?.pages) ? new Set(before.pages) : null;
+  const afterPages = Array.isArray(after?.pages) ? new Set(after.pages) : null;
+  const urlOf = (issue) => issue.key.slice(issue.key.indexOf('|') + 1);
+
+  // Страница появилась в обходе только сейчас: её замечания не «новые», а «впервые
+  // увиденные». И наоборот, страница выпала из обхода: её замечания не «исправлены».
+  const onNewPage = (issue) => Boolean(beforePages && afterPages
+    && afterPages.has(urlOf(issue)) && !beforePages.has(urlOf(issue)));
+  const onDroppedPage = (issue) => Boolean(beforePages && afterPages
+    && beforePages.has(urlOf(issue)) && !afterPages.has(urlOf(issue)));
+
+  const gone = [...beforeKeys.values()].filter((issue) => !afterKeys.has(issue.key));
+  const added = [...afterKeys.values()].filter((issue) => !beforeKeys.has(issue.key));
+
+  const fixed = gone.filter((issue) => !onDroppedPage(issue));
+  const appeared = added.filter((issue) => !onNewPage(issue));
+  const newPagesIssues = added.filter(onNewPage);
+  const newPages = beforePages && afterPages
+    ? [...afterPages].filter((url) => !beforePages.has(url)).length
+    : 0;
 
   const group = (list) => {
     const byCode = new Map();
@@ -106,6 +130,8 @@ export function diffSnapshots(before, after) {
     appeared: appeared.length,
     fixedByCode: group(fixed),
     appearedByCode: group(appeared),
+    newPages,
+    newPagesIssues: newPagesIssues.length,
     delta: {
       critical: (after?.summary?.critical ?? 0) - (before?.summary?.critical ?? 0),
       recommended: (after?.summary?.recommended ?? 0) - (before?.summary?.recommended ?? 0)

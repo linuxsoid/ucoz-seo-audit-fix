@@ -813,6 +813,8 @@ function describeHistory(history) {
     diff: history.diff ? {
       fixed: history.diff.fixed,
       appeared: history.diff.appeared,
+      newPages: history.diff.newPages ?? 0,
+      newPagesIssues: history.diff.newPagesIssues ?? 0,
       delta: history.diff.delta,
       fixedByCode: titled(history.diff.fixedByCode),
       appearedByCode: titled(history.diff.appearedByCode)
