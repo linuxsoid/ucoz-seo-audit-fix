@@ -1035,7 +1035,6 @@ npm install --omit=dev</code></pre>
       scrollToResult();
     }
 
-    /** Подводит экран к блоку результата, не дёргая страницу, если он и так виден. */
     /*
      * Что изменилось с прошлой проверки этого сайта.
      *
@@ -1094,6 +1093,7 @@ npm install --omit=dev</code></pre>
       }
     }
 
+    /** Подводит экран к блоку результата, не дёргая страницу, если он и так виден. */
     function scrollToResult() {
       var box = document.getElementById('check-out');
       if (!box) return;
