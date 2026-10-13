@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { auditHtmlBundle, robotsBlocksEveryone, classifyCertificate } from '../src/seo-audit.mjs';
+import { auditHtmlBundle, robotsBlocksEveryone, classifyCertificate, findDeepPagesByClicks } from '../src/seo-audit.mjs';
 import { lighthouseChecksFromResult, pickTopIssues } from '../src/lighthouse-audit.mjs';
 import { compareAudits } from '../src/compare-audits.mjs';
 
@@ -21,6 +21,29 @@ function checksFor(html) {
 function codes(checks) {
   return checks.filter((c) => c.severity !== 'pass').map((c) => c.code);
 }
+
+test('глубина страницы считается по кликам, а не по сегментам URL', () => {
+  const page = (url, hrefs = []) => ({
+    url,
+    html: '<html></html>',
+    links: hrefs.map((href) => ({ href, internal: true }))
+  });
+
+  const directDeepUrl = 'https://shop.example/shop/apple/iphone/18-series';
+  const pages = [
+    page('https://shop.example/', [directDeepUrl, 'https://shop.example/a']),
+    page(directDeepUrl),
+    page('https://shop.example/a', ['https://shop.example/b']),
+    page('https://shop.example/b', ['https://shop.example/c']),
+    page('https://shop.example/c', ['https://shop.example/d']),
+    page('https://shop.example/d')
+  ];
+
+  const deep = findDeepPagesByClicks(pages);
+  assert.ok(!deep.some((item) => item.url === directDeepUrl),
+    'прямая ссылка с главной ошибочно признана глубокой из-за длинного URL');
+  assert.deepEqual(deep, [{ url: 'https://shop.example/d', depth: 4 }]);
+});
 
 test('несколько H1 дают ровно одно замечание, а не два', () => {
   // Замечание добавлялось в двух разных местах разбора, и в сводке одна проблема

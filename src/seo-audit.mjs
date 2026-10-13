@@ -905,11 +905,11 @@ function auditSiteWide(pages, origin) {
   }
 
   // --- Глубина вложенности ---
-  // Чем глубже страница, тем меньше веса до неё доходит. Три клика от главной это
-  // общепринятый ориентир.
-  const deep = htmlPages
-    .map((page) => ({ url: page.url, depth: pathDepth(page.url) }))
-    .filter((item) => item.depth > 3);
+  // Глубина SEO это число ПЕРЕХОДОВ от главной, а не число сегментов в URL.
+  // Интернет-магазины часто сохраняют иерархию каталога в адресе, хотя ссылка на
+  // товар или категорию уже есть прямо на главной. Считать такой адрес глубоким
+  // значит отправлять владельца переделывать корректную структуру сайта.
+  const deep = findDeepPagesByClicks(htmlPages);
   if (deep.length) {
     checks.push(issue('recommended', 'links.deep_pages', deep[0].url,
       `Страниц глубже третьего уровня: ${deep.length}.`,
@@ -939,12 +939,43 @@ function isHomePage(url) {
   }
 }
 
-function pathDepth(url) {
-  try {
-    return new URL(url).pathname.split('/').filter(Boolean).length;
-  } catch {
-    return 0;
+/**
+ * Возвращает проверенные страницы, до которых от главной нужно больше maxDepth
+ * переходов. Страницы без достижимого пути сюда не входят: для них уже есть
+ * отдельная проверка links.orphan_pages.
+ */
+export function findDeepPagesByClicks(pages, maxDepth = 3) {
+  const htmlPages = (pages ?? []).filter((page) => page?.html);
+  if (!htmlPages.length) return [];
+
+  const pageByUrl = new Map(
+    htmlPages.map((page) => [normalizeForCompare(page.url), page])
+  );
+  const home = htmlPages.find((page) => isHomePage(page.url));
+  if (!home) return [];
+
+  const homeKey = normalizeForCompare(home.url);
+  const depths = new Map([[homeKey, 0]]);
+  const queue = [home];
+
+  while (queue.length) {
+    const page = queue.shift();
+    const pageKey = normalizeForCompare(page.url);
+    const currentDepth = depths.get(pageKey);
+
+    for (const link of page.links ?? []) {
+      if (!link.internal) continue;
+      const targetKey = normalizeForCompare(link.href);
+      const target = pageByUrl.get(targetKey);
+      if (!target || depths.has(targetKey)) continue;
+      depths.set(targetKey, currentDepth + 1);
+      queue.push(target);
+    }
   }
+
+  return htmlPages
+    .map((page) => ({ url: page.url, depth: depths.get(normalizeForCompare(page.url)) }))
+    .filter((item) => Number.isInteger(item.depth) && item.depth > maxDepth);
 }
 
 /** Сравниваем адреса без хвостового слэша и без якоря, иначе одна страница двоится. */
