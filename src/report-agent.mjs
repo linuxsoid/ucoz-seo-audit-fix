@@ -89,6 +89,7 @@ const EN = {
   'tls.chain_ok': ['Certificate chain is fine', ''],
 
   'trust.contacts_missing': ['No phone, email or messenger found on the site', 'Add a way to get in touch in the header or footer.'],
+  'ucoz.demo_content': ['Leftover demo content from the site builder template', 'Replace the sample text with real content or delete the page. Fill About and Contacts pages with real data.'],
   'trust.contacts_ok': ['Contact details present', ''],
 
   'analytics.counter_missing': ['No analytics counter found', 'Install Yandex.Metrica or Google Analytics.'],

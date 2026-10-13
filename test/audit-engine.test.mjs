@@ -367,3 +367,26 @@ test('превью правки шаблона показывает только
   assert.ok(added.length > 0 && added.length < 10,
     `ожидали несколько добавленных строк, получили ${added.length}`);
 });
+
+test('демо-начинка конструктора узнаётся, а обычный текст нет', async () => {
+  const { auditDemoContent } = await import('../src/seo-audit.mjs');
+  const page = (html) => ({ url: 'https://site/x', html });
+
+  // Подсказка шаблона на странице «Контакты»: текст и ссылка в панель.
+  const contacts = auditDemoContent(page('<p>Для настройки перейдите в <a href="/panel/?a=site">панель управления модулем</a>.</p>'));
+  assert.equal(contacts.length, 1);
+  assert.equal(contacts[0].code, 'ucoz.demo_content');
+
+  // Образец статьи из нового сайта.
+  assert.equal(auditDemoContent(page('<h1>Взгляд в будущее: новые технологии повседневной жизни</h1>')).length, 1);
+
+  // Ссылка в панель с полным адресом тоже признак.
+  assert.equal(auditDemoContent(page('<a href="https://site.ucoz.net/panel/?a=publ">тут</a>')).length, 1);
+
+  // Обычные страницы, в том числе со словами «тренды» и «новинки», демо не считаются.
+  assert.equal(auditDemoContent(page('<h1>Тренды и новинки сезона</h1><p>Наш каталог.</p>')).length, 0);
+  assert.equal(auditDemoContent(page('<a href="/news/">Новости</a> <a href="/panel-design/">Панели</a>')).length, 0);
+
+  // Закомментированная подсказка на странице не видна, это не демо.
+  assert.equal(auditDemoContent(page('<!-- <a href="/panel/?a=site">панель управления модулем</a> --><p>Текст</p>')).length, 0);
+});

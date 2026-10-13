@@ -140,3 +140,39 @@ test('ответ без HTML-тела получает проверку кода
     await stop();
   }
 });
+
+test('индексный sitemap раскрывается: сайт со скриптовым меню проверяется не по одной главной', async () => {
+  // Ровно так устроен любой сайт на uCoz: sitemap.xml это индекс со ссылками на карты
+  // модулей, а в меню главной ссылок для робота нет. Раньше из индекса брались адреса
+  // самих XML-файлов, отбрасывались как файлы, и обход заканчивался на главной.
+  const { base, stop } = await serve((req, res) => {
+    if (req.url === '/sitemap.xml') {
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      return res.end(`<?xml version="1.0"?><sitemapindex><sitemap><loc>${base}/sitemap-news.xml</loc></sitemap>` +
+        `<sitemap><loc>${base}/sitemap-site.xml</loc></sitemap>` +
+        `<sitemap><loc>https://evil.example/sitemap.xml</loc></sitemap></sitemapindex>`);
+    }
+    if (req.url === '/sitemap-news.xml') {
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      return res.end(`<urlset><url><loc>${base}/news/1</loc></url><url><loc>${base}/news/2</loc></url></urlset>`);
+    }
+    if (req.url === '/sitemap-site.xml') {
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      return res.end(`<urlset><url><loc>${base}/about</loc></url></urlset>`);
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    // Главная без единой ссылки: меню рисуется скриптом.
+    res.end(page(req.url === '/' ? 'Главная' : `Страница ${req.url}`));
+  });
+
+  try {
+    const result = await auditSite(`${base}/`, { maxPages: 8 });
+    const urls = result.pages.map((p) => p.url.replace(base, ''));
+    for (const path of ['/news/1', '/news/2', '/about']) {
+      assert.ok(urls.includes(path), `страница ${path} из вложенной карты должна попасть в обход, обошли: ${urls.join(', ')}`);
+    }
+    assert.equal(urls.some((u) => u.includes('evil')), false, 'карта со ссылкой на чужой домен не уводит обход наружу');
+  } finally {
+    await stop();
+  }
+});

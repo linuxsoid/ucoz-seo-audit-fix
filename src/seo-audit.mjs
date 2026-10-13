@@ -41,7 +41,7 @@ export async function auditSite(startUrl, options = {}) {
 
     if (page.html) {
       const links = extractLinks(page.html, url);
-      page.checks = auditHtml(page, links);
+      page.checks = [...auditHtml(page, links), ...auditDemoContent(page)];
       page.links = links.slice(0, 200);
 
       for (const link of links) {
@@ -135,7 +135,7 @@ export function auditHtmlBundle(items, options = {}) {
       html,
       links: links.slice(0, 200)
     };
-    page.checks = auditHtml(page, links);
+    page.checks = [...auditHtml(page, links), ...auditDemoContent(page)];
     pages.push(page);
   }
 
@@ -325,6 +325,19 @@ async function auditSiteFiles(origin, guard) {
   } else {
     checks.push(pass('site.sitemap_found', origin, 'sitemap.xml доступен.'));
     sitemapUrls.push(...extractSitemapUrls(sitemap.text, origin));
+
+    // Индексный sitemap раскрываем: в нём не страницы, а ссылки на другие карты.
+    // uCoz отдаёт именно такой на каждом сайте, по карте на модуль, поэтому без этого
+    // шага добор адресов из карты не срабатывал ни на одном сайте uCoz.
+    for (const child of extractSitemapChildren(sitemap.text, origin)) {
+      if (sitemapUrls.length >= SITEMAP_URL_LIMIT) break;
+      const part = await fetchText(child, guard);
+      if (!part.ok) continue;
+      for (const url of extractSitemapUrls(part.text, origin)) {
+        if (sitemapUrls.length >= SITEMAP_URL_LIMIT) break;
+        if (!sitemapUrls.includes(url)) sitemapUrls.push(url);
+      }
+    }
   }
 
   return { checks, sitemapUrls };
@@ -342,10 +355,88 @@ async function auditSiteFiles(origin, guard) {
  * поисковику. Берём его как второй источник адресов, когда ссылок не хватило.
  *
  * Разбираем регуляркой, а не разборщиком XML: нужен только текст внутри loc, а тащить
- * зависимость ради одного тега незачем. Вложенные карты сайта (sitemapindex) не
- * раскрываем: это второй запрос за файлом, а нам хватает и первой сотни адресов.
+ * зависимость ради одного тега незачем.
+ *
+ * Индексный sitemap (sitemapindex) раскрывает вызывающий код через
+ * extractSitemapChildren. Раньше здесь было записано, что вложенные карты раскрывать не
+ * нужно, «хватит и первой сотни адресов». Но в индексе нет ни одного адреса страницы,
+ * только ссылки на другие карты, и uCoz отдаёт именно индекс на каждом сайте. Итог: на
+ * сайтах uCoz добор из карты не давал ни одной страницы, и сайт с меню на скрипте
+ * проверялся по одной главной.
  */
-function extractSitemapUrls(xml, origin) {
+/** Сколько адресов страниц брать из карт сайта всего, со всех вложенных карт. */
+const SITEMAP_URL_LIMIT = 100;
+
+/** Сколько вложенных карт открывать. Каждая это отдельный запрос к чужому сайту. */
+const SITEMAP_CHILD_LIMIT = 10;
+
+/**
+ * Адреса вложенных карт из индексного sitemap.
+ *
+ * Берём только свой домен: карта со ссылкой на чужой сайт это повод не идти туда, а не
+ * лазейка. Адрес всё равно проходит через тот же безопасный обходчик, что и страницы.
+ */
+/**
+ * Демо-начинка конструктора, оставшаяся на сайте.
+ *
+ * Новый сайт на uCoz создаётся не пустым: в модулях лежат образцы статей и новостей, а
+ * страницы «О нас» и «Контакты» заполнены текстом-подсказкой со ссылкой в панель
+ * управления. Многие владельцы так и не доходят до них, и годами в поиске висят новости
+ * про «новое поколение батарей» на сайте автосервиса и страница «Контакты», где вместо
+ * контактов написано «перейдите в панель управления модулем».
+ *
+ * Это видно снаружи, ключи не нужны, и ни один внешний аудит этого не ловит, потому что
+ * не знает, как выглядит демо uCoz. Признаки взяты с живых свежих сайтов, а не придуманы:
+ * ссылка в панель управления на публичной странице и дословные фразы образцов.
+ */
+const DEMO_PHRASES = [
+  'панель управления модулем',
+  'Чтобы начать работу с модулем',
+  'Расширяйте возможности вашего сайта с модулем',
+  'Взгляд в будущее: новые технологии повседневной жизни',
+  'Революция в области энергетики: новое поколение батарей'
+];
+
+export function auditDemoContent(page) {
+  const html = String(page.html ?? '');
+  if (!html) return [];
+  const body = stripComments(html);
+
+  // Ссылка в панель управления. Своему сайту владелец её на публичной странице не ставит:
+  // это всегда подсказка шаблона «отредактируйте меня».
+  const panelLink = /href=["'](?:https?:\/\/[^"'\/]+)?\/panel\/\?a=/i.test(body);
+  const phrase = DEMO_PHRASES.find((text) => body.includes(text));
+
+  if (!panelLink && !phrase) return [];
+
+  const evidence = phrase
+    ? `на странице текст образца: «${phrase}»`
+    : 'на странице ссылка в панель управления сайтом';
+
+  return [issue('recommended', 'ucoz.demo_content', page.url,
+    `Похоже, это демо-страница конструктора, которую не заменили своим текстом: ${evidence}.`,
+    'Замените текст своим или удалите страницу. Если это «О нас» или «Контакты», заполните их настоящими данными: посетитель ищет там вас, а не подсказку шаблона.')];
+}
+
+export function extractSitemapChildren(xml, origin) {
+  const text = String(xml ?? '');
+  if (!/<sitemapindex[\s>]/i.test(text)) return [];
+  const out = [];
+  for (const match of text.matchAll(/<sitemap>[\s\S]*?<loc>\s*([^<\s]+)\s*<\/loc>[\s\S]*?<\/sitemap>/gi)) {
+    try {
+      const url = new URL(decodeHtml(match[1]).trim());
+      if (url.origin !== origin) continue;
+      url.hash = '';
+      if (!out.includes(url.href)) out.push(url.href);
+    } catch {
+      // Битый адрес в индексе пропускаем.
+    }
+    if (out.length >= SITEMAP_CHILD_LIMIT) break;
+  }
+  return out;
+}
+
+export function extractSitemapUrls(xml, origin) {
   const out = [];
   for (const match of String(xml ?? '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
     try {
