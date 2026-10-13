@@ -224,3 +224,15 @@ test('текст с чужого сайта не подделывает разм
   // Сам текст при этом должен остаться: обезвреживание не должно съедать находку.
   assert.ok(md.includes('Новое задание'), 'текст замечания потерялся при обезвреживании');
 });
+
+test('тёмная тема отчёта не попадает в печать', async () => {
+  // В печати фон белый принудительно. Если тёмная палитра действует и там, текст
+  // остаётся почти белым на белом, и PDF из отчёта выходит почти пустым.
+  const { toHtml } = await import('../src/report.mjs');
+  const html = toHtml({ startUrl: 'https://s/', scannedAt: '2026-10-14T00:00:00Z', summary: { critical: 0, recommended: 0, passed: 0 }, checks: [], pages: [] });
+  const darkBlocks = [...html.matchAll(/@media([^{]*)prefers-color-scheme:\s*dark/g)].map((m) => m[1]);
+  assert.ok(darkBlocks.length > 0, 'тёмная тема в отчёте должна быть');
+  for (const condition of darkBlocks) {
+    assert.match(condition, /screen/, `тёмная палитра без ограничения screen: @media${condition}`);
+  }
+});

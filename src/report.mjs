@@ -165,7 +165,10 @@ export function toHtml(result) {
       --ok-bg: #e9f7ef; --ok-ink: #17693c; --ok-line: #c9e9d6;
       --code-bg: #f1eee9;
     }
-    @media (prefers-color-scheme: dark) {
+    /* Тёмная палитра только для экрана. Без слова screen она применялась и к печати:
+       фон в печати принудительно белый, а текст при тёмной теме системы оставался почти
+       белым, и PDF из отчёта выходил почти пустым. */
+    @media screen and (prefers-color-scheme: dark) {
       :root {
         --bg: #14161a; --panel: #1c1f25; --line: #2c313a; --ink: #eceef2; --muted: #9aa4b2;
         --accent: #7aa7ff; --crit-bg: #341b1b; --crit-ink: #ff9b9b; --crit-line: #4d2626;
