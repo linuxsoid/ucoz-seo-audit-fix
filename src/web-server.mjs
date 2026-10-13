@@ -65,6 +65,8 @@ import { toMarkdown, toHtml } from './report.mjs';
 import { lighthouseChecksFromResult } from './lighthouse-audit.mjs';
 import { createZip } from './zip.mjs';
 import { toAgentMarkdown } from './report-agent.mjs';
+import { createHistory } from './history.mjs';
+import { humanize } from './human-labels.mjs';
 
 /**
  * Число из переменной окружения.
@@ -498,6 +500,9 @@ const SESSION_TTL_MS = 15 * 60 * 1000;
  * десятка результатов за пятнадцатиминутное окно жизни сессии просто не появится.
  */
 const SESSION_MAX = 20;
+
+/** История проверок по сайтам. Живёт на диске, переживает перезапуск сервиса. */
+const siteHistory = createHistory();
 const sessions = new Map();
 
 function rememberAudit(result) {
@@ -630,9 +635,15 @@ async function handleAudit(req, res) {
         agentMdEn: toAgentMarkdown(result, { lang: 'en' })
       }, null, null));
 
+      // Запоминаем слепок и сразу считаем разницу с прошлой проверкой этого же сайта.
+      // История второстепенна: если запись не удалась, проверка всё равно отдаётся.
+      const history = await siteHistory.record(result.startUrl ?? target, result)
+        .catch(() => ({ previous: null, diff: null, saved: false }));
+
       return sendJson(res, 200, {
         sessionId,
         ...compactResult(result, Date.now() - startedAt),
+        history: describeHistory(history),
         result: bundleInfo(sessionId)
       });
     } catch (error) {
@@ -782,6 +793,31 @@ async function handleDeepAudit(req, res) {
   } catch (error) {
     return sendJson(res, 502, { error: String(error?.message ?? error) });
   }
+}
+
+/**
+ * История для экрана: прошлая проверка и разница с ней, с человеческими названиями.
+ *
+ * Коды проблем человеку ничего не говорят, а витрина не должна держать у себя вторую
+ * копию словаря. Поэтому названия подставляются здесь, из того же human-labels, что и
+ * в отчёте. Если для кода названия нет, остаётся сообщение-заглушка, а не пустая строка.
+ */
+function describeHistory(history) {
+  if (!history?.previous) return { previous: null, diff: null };
+  const titled = (list) => (list ?? []).slice(0, 10).map((entry) => ({
+    ...entry,
+    title: humanize(entry.code)?.title ?? entry.code
+  }));
+  return {
+    previous: history.previous,
+    diff: history.diff ? {
+      fixed: history.diff.fixed,
+      appeared: history.diff.appeared,
+      delta: history.diff.delta,
+      fixedByCode: titled(history.diff.fixedByCode),
+      appearedByCode: titled(history.diff.appearedByCode)
+    } : null
+  };
 }
 
 function compactResult(result, ms) {

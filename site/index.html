@@ -991,9 +991,11 @@ npm install --omit=dev</code></pre>
         '<div class="why">Если проблемы будет править ИИ-агент, в архиве есть готовое ' +
         'задание для него: папка «для ИИ», отдать целиком, пересказывать не надо. ' +
         'А чтобы правки применялись автоматически прямо в шаблонах, нужен ' +
-        '<a href="#install">наш MCP вместе с официальным uCoz MCP</a>.</div></div>';
+        '<a href="#install">наш MCP вместе с официальным uCoz MCP</a>.</div>' +
+        '<div class="why">Когда поправите, проверьте сайт ещё раз: мы помним прошлую ' +
+        'проверку и покажем, какие проблемы ушли, а какие появились.</div></div>';
 
-      out.innerHTML = blocker + scores + skipped + issues + download + deep + cta;
+      out.innerHTML = blocker + historyBlock(data.history) + scores + skipped + issues + download + deep + cta;
 
       // Раскрытие списка страниц. Отчёт группирует проблемы по типу, иначе тридцать
       // рекомендаций превращаются в тридцать одинаковых строк. Но без списка адресов
@@ -1034,6 +1036,55 @@ npm install --omit=dev</code></pre>
     }
 
     /** Подводит экран к блоку результата, не дёргая страницу, если он и так виден. */
+    /*
+     * Что изменилось с прошлой проверки этого сайта.
+     *
+     * Сервер помнит прошлые проверки и сам считает разницу по конкретным проблемам на
+     * конкретных страницах, а не по счётчикам: счётчик может не сдвинуться, если одну
+     * проблему починили, а другая появилась. Здесь только показываем.
+     */
+    function historyBlock(history) {
+      if (!history || !history.previous || !history.diff) return '';
+      var when = formatDate(history.previous.scannedAt);
+      var d = history.diff;
+
+      if (!d.fixed && !d.appeared) {
+        return '<div class="check-msg" style="margin-bottom:14px"><b>С прошлой проверки ' +
+          escapeHtml(when) + ' ничего не изменилось.</b>' +
+          '<div class="why">Те же проблемы на тех же страницах.</div></div>';
+      }
+
+      var parts = [];
+      if (d.fixed) parts.push('ушло ' + d.fixed + ' ' + plural(d.fixed, 'замечание', 'замечания', 'замечаний'));
+      if (d.appeared) parts.push('появилось ' + d.appeared + ' ' + plural(d.appeared, 'новое', 'новых', 'новых'));
+
+      var list = function (title, items) {
+        if (!items || !items.length) return '';
+        return '<div class="why"><b>' + title + '</b><ul style="margin:4px 0 0;padding-left:18px">' +
+          items.slice(0, 5).map(function (item) {
+            return '<li>' + escapeHtml(item.title) + (item.count > 1 ? ' (' + item.count + ')' : '') + '</li>';
+          }).join('') + '</ul></div>';
+      };
+
+      var good = d.fixed && !d.appeared;
+      return '<div class="check-msg' + (d.appeared && !d.fixed ? ' bad' : '') + '" style="margin-bottom:14px">' +
+        '<b>С прошлой проверки ' + escapeHtml(when) + ': ' + parts.join(', ') + '.</b>' +
+        (good ? '<div class="why">Правки сработали.</div>' : '') +
+        list('Ушло', d.fixedByCode) +
+        list('Появилось', d.appearedByCode) +
+        '</div>';
+    }
+
+    function formatDate(value) {
+      var date = new Date(value);
+      if (isNaN(date.getTime())) return '';
+      try {
+        return date.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return date.toISOString().slice(0, 16).replace('T', ' ');
+      }
+    }
+
     function scrollToResult() {
       var box = document.getElementById('check-out');
       if (!box) return;
@@ -1137,6 +1188,7 @@ npm install --omit=dev</code></pre>
           '<a class="btn" href="' + zip + '">Скачать всё архивом' +
             (res.bytes ? ' <span class="check-note">' + humanSize(res.bytes) + '</span>' : '') +
           '</a>' +
+          '<button type="button" class="btn" data-recheck="1">Проверить снова</button>' +
         '</div>' +
         '<p class="check-note" style="margin:12px 0 0">Отчёт и архив живут ' + (res.livesMinutes || 15) +
         ' минут, потом удаляются с сервера. Если нужно сохранить, скачайте архив.</p>' +
@@ -1145,6 +1197,16 @@ npm install --omit=dev</code></pre>
       var host = document.createElement('div');
       host.innerHTML = html;
       out.appendChild(host);
+
+      var recheck = host.querySelector('[data-recheck]');
+      if (recheck) {
+        recheck.addEventListener('click', function () {
+          // Проверяем тот же адрес, который реально проверяли, а не то, что человек
+          // успел напечатать в поле после этого.
+          if (lastUrl) input.value = lastUrl;
+          if (form.requestSubmit) { form.requestSubmit(); } else { form.dispatchEvent(new Event('submit', { cancelable: true })); }
+        });
+      }
     }
 
     /**
