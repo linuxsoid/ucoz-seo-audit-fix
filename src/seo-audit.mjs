@@ -20,7 +20,7 @@ export async function auditSite(startUrl, options = {}) {
   const pages = [];
 
   const files = await auditSiteFiles(origin, guard);
-  const siteChecks = [...files.checks, ...(await auditTls(origin))];
+  const siteChecks = [...files.checks, ...(await auditTls(origin)), ...(await auditMirrors(origin, guard))];
 
   while (queue.length && pages.length < maxPages) {
     signal?.throwIfAborted();
@@ -41,7 +41,7 @@ export async function auditSite(startUrl, options = {}) {
 
     if (page.html) {
       const links = extractLinks(page.html, url);
-      page.checks = [...auditHtml(page, links), ...auditDemoContent(page)];
+      page.checks = [...auditHtml(page, links), ...auditDemoContent(page), ...auditThinContent(page)];
       page.links = links.slice(0, 200);
 
       for (const link of links) {
@@ -127,6 +127,7 @@ export function auditHtmlBundle(items, options = {}) {
       templateName: item.templateName ?? item.name ?? '',
       adminUrl: item.adminUrl ?? '',
       sourceType: item.sourceType ?? 'template',
+      baseUrl,
       status: 200,
       ok: true,
       contentType: 'text/html',
@@ -343,27 +344,6 @@ async function auditSiteFiles(origin, guard) {
   return { checks, sitemapUrls };
 }
 
-/**
- * Достаёт адреса страниц из sitemap.xml.
- *
- * Зачем это обходу. Обход идёт по ссылкам с главной, а на сайтах, собранных
- * конструктором, меню часто рисуется скриптом, и в исходнике страницы ссылок почти нет.
- * Замерено на живом сайте: на главной четыре внутренние ссылки, из которых три ведут на
- * картинки. Проверять было практически нечего, хотя страниц у сайта десятки.
- *
- * sitemap.xml для этого и существует: это список страниц, который владелец сам отдаёт
- * поисковику. Берём его как второй источник адресов, когда ссылок не хватило.
- *
- * Разбираем регуляркой, а не разборщиком XML: нужен только текст внутри loc, а тащить
- * зависимость ради одного тега незачем.
- *
- * Индексный sitemap (sitemapindex) раскрывает вызывающий код через
- * extractSitemapChildren. Раньше здесь было записано, что вложенные карты раскрывать не
- * нужно, «хватит и первой сотни адресов». Но в индексе нет ни одного адреса страницы,
- * только ссылки на другие карты, и uCoz отдаёт именно индекс на каждом сайте. Итог: на
- * сайтах uCoz добор из карты не давал ни одной страницы, и сайт с меню на скрипте
- * проверялся по одной главной.
- */
 /** Сколько адресов страниц брать из карт сайта всего, со всех вложенных карт. */
 const SITEMAP_URL_LIMIT = 100;
 
@@ -371,11 +351,135 @@ const SITEMAP_URL_LIMIT = 100;
 const SITEMAP_CHILD_LIMIT = 10;
 
 /**
- * Адреса вложенных карт из индексного sitemap.
+ * Страница почти без текста.
  *
- * Берём только свой домен: карта со ссылкой на чужой сайт это повод не идти туда, а не
- * лазейка. Адрес всё равно проходит через тот же безопасный обходчик, что и страницы.
+ * Поиску нечего показывать по странице, на которой два предложения: такие он часто не
+ * берёт в индекс вовсе, а сайт, где их много, считает пустым. Считаем слова во всём теле
+ * страницы вместе с меню и подвалом, без скриптов и стилей. Меню само даёт десятки слов,
+ * поэтому порог низкий: если и с меню набирается меньше, текста на странице правда нет.
+ *
+ * Только для живых страниц: у фрагмента шаблона текст подставляется движком, и он
+ * всегда выглядел бы пустым.
+ *
+ * Не трогаем страницы, закрытые от индексации, и формы входа и регистрации. Первый
+ * прогон по живым сайтам дал почти одни такие: вход и регистрация на uCoz и на самом
+ * ucoz.ru. Текст им не нужен, и в поиске им делать нечего.
  */
+export const THIN_CONTENT_WORDS = 50;
+
+export function auditThinContent(page) {
+  if (!page?.ok || !page.html) return [];
+  const html = stripComments(page.html);
+  if (/noindex/i.test(getMeta(html, 'name', 'robots')) || /noindex/i.test(page.xRobotsTag ?? '')) return [];
+  if (/<input\b[^>]*type\s*=\s*["']?password/i.test(html)) return [];
+  // Форма входа бывает нарисована скриптом, и поля пароля в исходнике нет. Так на ucoz.ru.
+  if (/\/(login|logout|register|signin|signup|auth|createsite|cart|basket|search)\b/i.test(parseUrl(page.url)?.pathname ?? '')) return [];
+  const body = (html.match(/<body\b[^>]*>([\s\S]*)<\/body>/i) ?? [])[1] ?? html;
+  const text = normalizeWhitespace(body.replace(/<(script|style|noscript|template|svg)\b[\s\S]*?<\/\1>/gi, ' '));
+  const words = text.split(' ').filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+  if (words >= THIN_CONTENT_WORDS) return [];
+  return [issue('recommended', 'content.thin', page.url,
+    `На странице всего ${words} слов, считая меню и подвал.`,
+    'Добавьте текст, который отвечает на вопрос посетителя: что здесь, для кого, сколько стоит, как связаться. Если страница не нужна в поиске, закройте её от индексации.',
+    { words })];
+}
+
+/**
+ * Зеркала сайта: тот же сайт по http и по адресу с www или без.
+ *
+ * Для поиска http://site.ru, https://site.ru и https://www.site.ru это три разных сайта.
+ * Если все открываются сами по себе, без перенаправления на основной, поиск видит три
+ * копии одного текста и сам выбирает, какую показывать, а ссылочный вес делится между
+ * ними. Правильно, когда открывается один адрес, а остальные ведут на него 301.
+ *
+ * Третий случай нашёлся на живых сайтах uCoz со своим доменом: адрес с www отвечает
+ * сертификатом без www, и посетитель, набравший www.site.ru, видит в браузере «подключение
+ * не защищено». Проверено на нескольких сайтах, на всех одинаково.
+ *
+ * Адрес с www проверяем только у доменов вида site.ru и site.com.ru. У поддомена вроде
+ * site.ucoz.net адрес с www никто не набирает, и замечание было бы шумом.
+ */
+export function mirrorHostFor(hostname) {
+  const host = String(hostname ?? '').toLowerCase();
+  if (!host || /^[\d.]+$/.test(host) || host.includes(':')) return null;
+  if (host.startsWith('www.')) return host.slice(4);
+  const labels = host.split('.');
+  const apex = labels.length === 2
+    || (labels.length === 3 && /^(com|net|org|biz|msk|spb|pp|co|in)$/.test(labels[1]) && labels[2].length === 2);
+  return apex ? `www.${host}` : null;
+}
+
+/**
+ * Куда приводит адрес-зеркало: на основной сайт, никуда (открывается сам) или к ошибке
+ * сертификата. null, когда сказать нечего: адреса нет в DNS, он ведёт на чужой сайт или
+ * не отвечает. Молчать в этих случаях правильно, зеркала просто нет.
+ */
+export async function probeMirror(mirrorUrl, mainOrigin, guard, timeoutMs = 6000) {
+  const main = new URL(mainOrigin);
+  let current = mirrorUrl;
+  for (let hop = 0; hop <= 3; hop += 1) {
+    const here = new URL(current);
+    if (hop > 0 && here.host === main.host && here.protocol === main.protocol) return { kind: 'redirects' };
+
+    let response;
+    try {
+      if (guard) await guard(current);
+      response = await fetch(current, {
+        headers: { 'user-agent': USER_AGENT },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (error) {
+      const code = String(error?.cause?.code ?? error?.code ?? '');
+      if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY/i.test(code)) return { kind: 'bad_cert', url: current };
+      return null;
+    }
+    await response.body?.cancel().catch(() => {});
+
+    const location = response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
+    if (!location) return response.ok && hop === 0 ? { kind: 'duplicate', url: current } : null;
+    try {
+      current = new URL(location, current).href;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function auditMirrors(origin, guard) {
+  const checks = [];
+  const main = new URL(origin);
+  const alt = mirrorHostFor(main.hostname);
+
+  const [plain, www] = await Promise.all([
+    main.protocol === 'https:' ? probeMirror(`http://${main.host}/`, origin, guard) : null,
+    alt ? probeMirror(`${main.protocol}//${alt}/`, origin, guard) : null
+  ]);
+
+  if (plain?.kind === 'duplicate') {
+    checks.push(issue('recommended', 'site.http_no_redirect', `http://${main.host}/`,
+      'Сайт открывается и по http://, без перенаправления на https.',
+      'Включите постоянное перенаправление 301 с http на https. Тогда поиск видит один сайт, а не два одинаковых, и посетитель по старой ссылке попадает на защищённую версию.'));
+  } else if (plain?.kind === 'redirects') {
+    checks.push(pass('site.http_redirect_ok', origin, 'Адрес с http перенаправляет на https.'));
+  }
+
+  if (www?.kind === 'duplicate') {
+    checks.push(issue('recommended', 'site.mirror_duplicate', www.url,
+      `Сайт открывается и по адресу ${www.url}, без перенаправления на ${origin}/.`,
+      'Выберите один основной адрес и настройте на него перенаправление 301 со второго. Иначе поиск видит два одинаковых сайта и делит между ними вес.'));
+  } else if (www?.kind === 'bad_cert') {
+    checks.push(issue('recommended', 'site.mirror_bad_cert', www.url,
+      `Адрес ${www.url} открывается с ошибкой сертификата: браузер покажет «подключение не защищено».`,
+      'Сертификат должен покрывать оба адреса, с www и без. Если сайт на конструкторе, спросите поддержку, как выпустить сертификат на адрес с www или убрать его.'));
+  } else if (www?.kind === 'redirects') {
+    checks.push(pass('site.mirror_ok', origin, `Адрес ${alt} перенаправляет на основной.`));
+  }
+
+  return checks;
+}
+
 /**
  * Демо-начинка конструктора, оставшаяся на сайте.
  *
@@ -418,6 +522,12 @@ export function auditDemoContent(page) {
     'Замените текст своим или удалите страницу. Если это «О нас» или «Контакты», заполните их настоящими данными: посетитель ищет там вас, а не подсказку шаблона.')];
 }
 
+/**
+ * Адреса вложенных карт из индексного sitemap.
+ *
+ * Берём только свой домен: карта со ссылкой на чужой сайт это повод не идти туда, а не
+ * лазейка. Адрес всё равно проходит через тот же безопасный обходчик, что и страницы.
+ */
 export function extractSitemapChildren(xml, origin) {
   const text = String(xml ?? '');
   if (!/<sitemapindex[\s>]/i.test(text)) return [];
@@ -436,6 +546,27 @@ export function extractSitemapChildren(xml, origin) {
   return out;
 }
 
+/**
+ * Достаёт адреса страниц из sitemap.xml.
+ *
+ * Зачем это обходу. Обход идёт по ссылкам с главной, а на сайтах, собранных
+ * конструктором, меню часто рисуется скриптом, и в исходнике страницы ссылок почти нет.
+ * Замерено на живом сайте: на главной четыре внутренние ссылки, из которых три ведут на
+ * картинки. Проверять было практически нечего, хотя страниц у сайта десятки.
+ *
+ * sitemap.xml для этого и существует: это список страниц, который владелец сам отдаёт
+ * поисковику. Берём его как второй источник адресов, когда ссылок не хватило.
+ *
+ * Разбираем регуляркой, а не разборщиком XML: нужен только текст внутри loc, а тащить
+ * зависимость ради одного тега незачем.
+ *
+ * Индексный sitemap (sitemapindex) раскрывает вызывающий код через
+ * extractSitemapChildren. Раньше здесь было записано, что вложенные карты раскрывать не
+ * нужно, «хватит и первой сотни адресов». Но в индексе нет ни одного адреса страницы,
+ * только ссылки на другие карты, и uCoz отдаёт именно индекс на каждом сайте. Итог: на
+ * сайтах uCoz добор из карты не давал ни одной страницы, и сайт с меню на скрипте
+ * проверялся по одной главной.
+ */
 export function extractSitemapUrls(xml, origin) {
   const out = [];
   for (const match of String(xml ?? '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
@@ -568,6 +699,39 @@ function auditHtml(page, links) {
   if (!lang) checks.push(issue('recommended', 'html.lang_missing', page.url, 'У тега html отсутствует атрибут lang.', 'Добавьте lang в тег <html>.'));
   if (!getMeta(html, 'name', 'viewport')) checks.push(issue('critical', 'meta.viewport_missing', page.url, 'Отсутствует meta viewport.', 'Добавьте responsive viewport meta.'));
   if (!canonical) checks.push(issue('recommended', 'meta.canonical_missing', page.url, 'Отсутствует canonical-ссылка.', 'Добавьте canonical URL, если страница может дублироваться.'));
+
+  // --- Canonical на чужой сайт ---
+  // canonical говорит поиску «настоящая страница вон там». Если там другой домен, поиск
+  // отдаёт вес странице чужого сайта, а эту выкидывает из выдачи. Так бывает, когда шаблон
+  // скопировали с другого сайта вместе с жёстко вписанным адресом, или после переезда на
+  // новый домен. Сравниваем только с настоящим адресом страницы: у фрагмента шаблона без
+  // адреса не с чем сравнить, и подставной адрес по умолчанию дал бы ложный блокер.
+  const ownUrl = parseUrl(page.finalUrl || page.url);
+  if (canonical && ownUrl) {
+    const target = parseUrl(canonical, ownUrl);
+    if (target && /^https?:$/.test(target.protocol) && bareHost(target.hostname) !== bareHost(ownUrl.hostname)) {
+      checks.push(issue('critical', 'meta.canonical_foreign', page.url,
+        `Canonical указывает на другой сайт: ${target.href}`,
+        'Поставьте в canonical адрес этой же страницы на этом сайте. Иначе поиск считает её копией чужой страницы и не показывает.',
+        { value: target.href }));
+    }
+  }
+
+  // --- Смешанное содержимое ---
+  // Страница по https, а скрипт, стиль или фрейм на ней по http: такие браузер просто не
+  // загружает, и часть страницы молча ломается, а картинки по http помечают страницу как
+  // не полностью защищённую. Типичный след переезда на https, когда в шаблоне остались
+  // старые адреса с http://.
+  const protocolSource = ownUrl ?? parseUrl(page.baseUrl);
+  if (protocolSource?.protocol === 'https:') {
+    const insecure = findInsecureResources(html);
+    if (insecure.length) {
+      checks.push(issue('recommended', 'security.mixed_content', page.url,
+        `Страница открыта по https, но грузит по http: ${insecure.length} шт., например ${insecure.slice(0, 3).join(', ')}`,
+        'Замените http:// на https:// в адресах скриптов, стилей, картинок и фреймов. Скрипты и фреймы по http браузер не загрузит вовсе.',
+        { resources: insecure.slice(0, 10) }));
+    }
+  }
 
   for (const property of ['og:title', 'og:description', 'og:type', 'og:url']) {
     if (!getMeta(html, 'property', property)) checks.push(issue('recommended', `og.${property.replace(':', '_')}_missing`, page.url, `Отсутствует ${property}.`, 'Добавьте Open Graph метаданные.'));
@@ -1151,6 +1315,32 @@ function matchTags(html, tagName) {
     }
   }
   return out;
+}
+
+/** Ресурсы, которые страница грузит по http. Ссылки a href сюда не входят: это переход, а не загрузка. */
+function findInsecureResources(html) {
+  const body = stripComments(html);
+  const found = [];
+  for (const tagName of ['script', 'img', 'iframe', 'source', 'video', 'audio', 'embed']) {
+    for (const tag of matchTags(body, tagName)) found.push(getAttr(tag, 'src'));
+  }
+  for (const tag of matchTags(body, 'link')) {
+    if (/stylesheet/i.test(getAttr(tag, 'rel'))) found.push(getAttr(tag, 'href'));
+  }
+  return [...new Set(found.map((src) => decodeHtml(src).trim()).filter((src) => /^http:\/\//i.test(src)))];
+}
+
+function parseUrl(value, base) {
+  try {
+    return value ? new URL(value, base) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** www и без www для сравнения доменов это один сайт. */
+function bareHost(hostname) {
+  return String(hostname).toLowerCase().replace(/^www\./, '');
 }
 
 /** Убирает комментарии, чтобы разбор не принимал их содержимое за разметку. */

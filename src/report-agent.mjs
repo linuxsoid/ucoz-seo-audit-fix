@@ -89,6 +89,12 @@ const EN = {
   'tls.chain_ok': ['Certificate chain is fine', ''],
 
   'trust.contacts_missing': ['No phone, email or messenger found on the site', 'Add a way to get in touch in the header or footer.'],
+  'site.http_no_redirect': ['Site opens over both http and https', 'Add a permanent 301 redirect from http to https.'],
+  'site.mirror_duplicate': ['Site opens both with and without www', 'Pick one primary host and 301-redirect the other to it.'],
+  'site.mirror_bad_cert': ['The www address fails with a certificate error', 'Issue a certificate that covers both hosts, with and without www.'],
+  'security.mixed_content': ['HTTPS page loads resources over http', 'Switch script, style, image and iframe URLs to https.'],
+  'meta.canonical_foreign': ['Canonical points to another site', 'Set canonical to this page on this site.'],
+  'content.thin': ['Page has almost no text', 'Add useful text or close the page from indexing.'],
   'ucoz.demo_content': ['Leftover demo content from the site builder template', 'Replace the sample text with real content or delete the page. Fill About and Contacts pages with real data.'],
   'trust.contacts_ok': ['Contact details present', ''],
 
